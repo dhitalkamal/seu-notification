@@ -47,18 +47,14 @@ class INotificationRepository(ABC):
     def unread_count(self, user_id: uuid.UUID) -> int: ...
 
     @abstractmethod
-    def batch_create(
-        self, entities: list[NotificationEntity]
-    ) -> list[NotificationEntity]: ...
+    def batch_create(self, entities: list[NotificationEntity]) -> list[NotificationEntity]: ...
 
 
 class INotificationPreferenceRepository(ABC):
     """Persistence contract for NotificationPreference records."""
 
     @abstractmethod
-    def get_or_create(
-        self, user_id: uuid.UUID, notification_type: str
-    ) -> NotificationPreferenceEntity: ...
+    def get_or_create(self, user_id: uuid.UUID, notification_type: str) -> NotificationPreferenceEntity: ...
 
     @abstractmethod
     def upsert(self, entity: NotificationPreferenceEntity) -> NotificationPreferenceEntity: ...

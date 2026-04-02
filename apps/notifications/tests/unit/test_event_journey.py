@@ -24,9 +24,7 @@ def test_create_journey_produces_five_stages():
     end = start + timedelta(hours=3)
     repo = FakeJourneyRepository()
 
-    journey = CreateEventJourneyUseCase(repo).execute(
-        event_id=uuid.uuid4(), event_start=start, event_end=end
-    )
+    journey = CreateEventJourneyUseCase(repo).execute(event_id=uuid.uuid4(), event_start=start, event_end=end)
 
     stage_types = {s.stage_type for s in journey.stages}
     assert "pre_event_week" in stage_types
@@ -44,9 +42,7 @@ def test_pre_event_week_triggers_7_days_before_start():
 
     start = _event_start(14)
     end = start + timedelta(hours=3)
-    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(
-        event_id=uuid.uuid4(), event_start=start, event_end=end
-    )
+    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(event_id=uuid.uuid4(), event_start=start, event_end=end)
 
     week_stage = next(s for s in journey.stages if s.stage_type == "pre_event_week")
     diff = start - week_stage.trigger_at
@@ -60,9 +56,7 @@ def test_post_event_followup_triggers_24_hours_after_end():
 
     start = _event_start(14)
     end = start + timedelta(hours=3)
-    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(
-        event_id=uuid.uuid4(), event_start=start, event_end=end
-    )
+    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(event_id=uuid.uuid4(), event_start=start, event_end=end)
 
     followup = next(s for s in journey.stages if s.stage_type == "post_event_followup")
     diff = followup.trigger_at - end
@@ -95,8 +89,6 @@ def test_new_journey_all_stages_pending():
 
     start = _event_start(14)
     end = start + timedelta(hours=3)
-    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(
-        event_id=uuid.uuid4(), event_start=start, event_end=end
-    )
+    journey = CreateEventJourneyUseCase(FakeJourneyRepository()).execute(event_id=uuid.uuid4(), event_start=start, event_end=end)
     for stage in journey.stages:
         assert stage.status == "pending"
