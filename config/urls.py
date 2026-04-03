@@ -16,6 +16,10 @@ urlpatterns = [
         "api/v1/",
         include("apps.notifications.presentation.urls"),
     ),
+    path(
+        "api/v1/digest-schedules/",
+        include("apps.notifications.presentation.digest_urls"),
+    ),
     # OpenAPI schema
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Use relative URL so the browser resolves it through the correct nginx prefix
