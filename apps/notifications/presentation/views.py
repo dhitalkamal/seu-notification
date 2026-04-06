@@ -30,6 +30,7 @@ from apps.notifications.application.use_cases.register_device_token import (
 from apps.notifications.application.use_cases.update_preference import (
     UpdateNotificationPreferenceUseCase,
 )
+from apps.notifications.infrastructure.acknowledgement_models import EventUpdateAcknowledgement
 from apps.notifications.infrastructure.repositories import (
     DjangoDeviceTokenRepository,
     DjangoEventJourneyRepository,
@@ -460,3 +461,82 @@ class BatchNotificationView(APIView):
             data=d.get("data"),
         )
         return created_response({"created": len(notifications)}, request=request)
+
+
+class AcknowledgeNotificationView(APIView):
+    """Record that the authenticated user has acknowledged an event-update notification."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Acknowledge event update notification",
+        description=(
+            "Creates an acknowledgement record for the given notification. Idempotent - calling twice returns 200 on the second call."
+        ),
+        responses={
+            201: OpenApiResponse(description="Acknowledgement created."),
+            200: OpenApiResponse(description="Already acknowledged."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            422: OpenApiResponse(description="Validation error."),
+        },
+    )
+    def post(self, request: Request, notification_id: uuid.UUID) -> Response:
+        """Create or retrieve the acknowledgement record for this (notification, user) pair."""
+        from rest_framework import serializers as drf_serializers
+
+        class _S(drf_serializers.Serializer):
+            event_id = drf_serializers.UUIDField()
+
+        ser = _S(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user_id = uuid.UUID(str(request.user.id))
+        event_id = ser.validated_data["event_id"]
+
+        ack, created = EventUpdateAcknowledgement.objects.get_or_create(
+            notification_id=notification_id,
+            user_id=user_id,
+            defaults={"event_id": event_id},
+        )
+
+        payload = {
+            "id": str(ack.id),
+            "notification_id": str(notification_id),
+            "user_id": str(user_id),
+            "event_id": str(event_id),
+            "acknowledged_at": ack.acknowledged_at.isoformat(),
+        }
+        if created:
+            return created_response(payload, request=request)
+        return success_response(payload, request=request)
+
+
+class EventAcknowledgementsListView(APIView):
+    """Return the list of users who acknowledged updates for a specific event."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="List event update acknowledgements",
+        description="Returns user IDs and timestamps for all users who acknowledged this event's update.",
+        responses={
+            200: OpenApiResponse(description="Acknowledgement list returned."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Return all acknowledgements for the given event."""
+        acks = list(
+            EventUpdateAcknowledgement.objects.filter(event_id=event_id).values("id", "notification_id", "user_id", "acknowledged_at")
+        )
+        data = [
+            {
+                "id": str(a["id"]),
+                "notification_id": str(a["notification_id"]),
+                "user_id": str(a["user_id"]),
+                "acknowledged_at": a["acknowledged_at"].isoformat() if a["acknowledged_at"] else None,
+            }
+            for a in acks
+        ]
+        return success_response(data, request=request)

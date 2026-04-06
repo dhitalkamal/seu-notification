@@ -342,6 +342,52 @@ def _send_push_for_participation(event_name: str, payload: dict) -> None:
         logger.info("FCM push sent to %d device(s) for event %s.", count, event_name)
 
 
+def _handle_event_updated(payload: dict) -> None:
+    """Create in-app notifications for all registered attendees when an event is updated.
+
+    The payload must contain event_id and attendee_ids. Each attendee gets an
+    in-app notification so they can review the changes and acknowledge.
+    """
+    from apps.notifications.application.use_cases.batch_create_notifications import (
+        BatchCreateNotificationsUseCase,
+    )
+    from apps.notifications.infrastructure.repositories import (
+        DjangoNotificationPreferenceRepository,
+        DjangoNotificationRepository,
+    )
+
+    event_id = payload.get("event_id", "")
+    event_title = payload.get("event_title", "an event")
+    attendee_ids_raw = payload.get("attendee_ids", [])
+
+    if not attendee_ids_raw:
+        logger.info("event.updated has no attendee_ids, skipping notifications. event_id=%s", event_id)
+        return
+
+    try:
+        attendee_ids = [uuid.UUID(str(uid)) for uid in attendee_ids_raw]
+    except ValueError:
+        logger.error("event.updated contained invalid attendee UUID(s). event_id=%s", event_id)
+        return
+
+    BatchCreateNotificationsUseCase(
+        DjangoNotificationRepository(),
+        DjangoNotificationPreferenceRepository(),
+    ).execute(
+        user_ids=attendee_ids,
+        notification_type="event_update",
+        channel="in_app",
+        title=f"Event updated: {event_title}",
+        message="Details for an event you are registered for have changed. Please review the updates.",
+        data={"event_id": event_id},
+    )
+    logger.info(
+        "event.updated notifications created for %d attendees. event_id=%s",
+        len(attendee_ids),
+        event_id,
+    )
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
@@ -369,6 +415,13 @@ def _handle_message(
     try:
         payload = json.loads(body)
         event_name = method.routing_key
+
+        # * event.updated is handled separately - it creates in-app notifications
+        if event_name == "event.updated":
+            _handle_event_updated(payload)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            return
+
         builder = _HANDLERS.get(event_name)
         if builder is None:
             logger.warning("No handler for event %s, skipping.", event_name)
@@ -404,6 +457,7 @@ def start_consuming() -> None:
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="participation.#")
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="org.#")
+    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="event.#")
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 

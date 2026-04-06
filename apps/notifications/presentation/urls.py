@@ -5,8 +5,10 @@ from __future__ import annotations
 from django.urls import URLPattern, path
 
 from .views import (
+    AcknowledgeNotificationView,
     BatchNotificationView,
     DeviceTokenView,
+    EventAcknowledgementsListView,
     EventJourneyView,
     HealthCheckView,
     NotificationListCreateView,
@@ -49,5 +51,15 @@ urlpatterns: list[URLPattern] = [
         "journeys/events/<uuid:event_id>/",
         EventJourneyView.as_view(),
         name="event-journey",
+    ),
+    path(
+        "notifications/<uuid:notification_id>/acknowledge/",
+        AcknowledgeNotificationView.as_view(),
+        name="notification-acknowledge",
+    ),
+    path(
+        "notifications/event/<uuid:event_id>/acknowledgements/",
+        EventAcknowledgementsListView.as_view(),
+        name="event-acknowledgements",
     ),
 ]
