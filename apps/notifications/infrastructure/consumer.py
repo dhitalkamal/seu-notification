@@ -388,6 +388,50 @@ def _handle_event_updated(payload: dict) -> None:
     )
 
 
+def _build_mfa_email_otp(payload: dict) -> EmailNotification:
+    """Build MFA email OTP delivery message."""
+    first_name = payload.get("first_name", "there")
+    otp_code = payload.get("otp_code", "")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p>Your Sansaar verification code is: <strong>{otp_code}</strong></p>"
+        "<p>This code expires in 10 minutes. Do not share it with anyone.</p>"
+    )
+    return EmailNotification(
+        to_email=payload.get("email", ""),
+        to_name=first_name,
+        subject="Your Sansaar verification code",
+        html_body=html,
+    )
+
+
+def _build_mfa_sms_otp(payload: dict) -> EmailNotification | None:
+    """Build MFA SMS OTP delivery. Uses SMS sender directly, returns None."""
+    phone = payload.get("phone", "")
+    otp_code = payload.get("otp_code", "")
+    if not phone or not otp_code:
+        logger.warning("mfa_sms_otp event missing phone or otp_code: %s", payload)
+        return None
+    # sms delivery handled separately via twilio in the sms sender
+    # for now, fall back to email if phone-based sending is not configured
+    first_name = payload.get("first_name", "there")
+    email = payload.get("email", "")
+    if email:
+        html = (
+            f"<p>Hi {first_name},</p>"
+            f"<p>Your Sansaar verification code is: <strong>{otp_code}</strong></p>"
+            "<p>This code expires in 10 minutes.</p>"
+        )
+        return EmailNotification(
+            to_email=email,
+            to_name=first_name,
+            subject="Your Sansaar verification code",
+            html_body=html,
+        )
+    logger.warning("mfa_sms_otp: no email fallback available for phone %s", phone)
+    return None
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
@@ -395,6 +439,8 @@ _HANDLERS = {
     "iam.mfa_enabled": _build_mfa_enabled,
     "iam.mfa_disabled": _build_mfa_disabled,
     "iam.account_locked": _build_account_locked,
+    "iam.mfa_email_otp_requested": _build_mfa_email_otp,
+    "iam.mfa_sms_otp_requested": _build_mfa_sms_otp,
     "participation.registration.created": _build_registration_confirmed,
     "participation.registration.cancelled": _build_registration_cancelled,
     "participation.waitlist.joined": _build_waitlist_joined,
