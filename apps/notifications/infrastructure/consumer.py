@@ -432,6 +432,41 @@ def _build_mfa_sms_otp(payload: dict) -> EmailNotification | None:
     return None
 
 
+def _build_payment_receipt(payload: dict) -> EmailNotification | None:
+    """Build payment receipt email after successful payment."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info(
+            "payment.order.completed missing email - skipping email send. order_id=%s",
+            payload.get("order_id"),
+        )
+        return None
+    name = payload.get("first_name", "there")
+    order_id = payload.get("order_id", "")
+    amount = payload.get("amount", "")
+    gateway = payload.get("gateway", "")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Your payment has been confirmed!</p>"
+        f"<p>Order: <strong>{order_id}</strong></p>"
+        f"<p>Amount: <strong>{amount}</strong></p>"
+        f"<p>Gateway: <strong>{gateway}</strong></p>"
+        f"<p>View your tickets at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject="Payment confirmed - your tickets are ready",
+        html_body=html,
+    )
+
+
+def _build_marketing_campaign(payload: dict) -> EmailNotification | None:
+    """Handles marketing.campaign.sent by iterating user_emails in the handler loop."""
+    # * campaign delivery is a batch operation - handled separately in _handle_message
+    return None
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
@@ -448,7 +483,38 @@ _HANDLERS = {
     "org.created": _build_org_created,
     "org.approved": _build_org_approved,
     "org.rejected": _build_org_rejected,
+    "payment.order.completed": _build_payment_receipt,
 }
+
+
+def _handle_campaign_sent(payload: dict) -> None:
+    """Send one email per address in user_emails for a marketing.campaign.sent event."""
+    subject = payload.get("subject", "")
+    body = payload.get("body", "")
+    user_emails: list[str] = payload.get("user_emails", [])
+    campaign_id = payload.get("campaign_id", "")
+
+    if not user_emails:
+        logger.info("marketing.campaign.sent has no user_emails, skipping. campaign_id=%s", campaign_id)
+        return
+
+    sent = 0
+    for email in user_emails:
+        if not email:
+            continue
+        notification = EmailNotification(
+            to_email=email,
+            to_name="",
+            subject=subject,
+            html_body=body,
+        )
+        try:
+            _send(notification)
+            sent += 1
+        except Exception:
+            logger.error("Failed to send campaign email to %s for campaign_id=%s.", email, campaign_id, exc_info=True)
+
+    logger.info("marketing.campaign.sent: %d/%d emails sent. campaign_id=%s", sent, len(user_emails), campaign_id)
 
 
 def _handle_message(
@@ -465,6 +531,12 @@ def _handle_message(
         # * event.updated is handled separately - it creates in-app notifications
         if event_name == "event.updated":
             _handle_event_updated(payload)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            return
+
+        # * marketing campaigns are batch operations - handled separately
+        if event_name == "marketing.campaign.sent":
+            _handle_campaign_sent(payload)
             channel.basic_ack(delivery_tag=method.delivery_tag)
             return
 
@@ -499,13 +571,18 @@ def start_consuming() -> None:
 
     channel.exchange_declare(exchange=_EXCHANGE, exchange_type=_EXCHANGE_TYPE, durable=True)
     channel.queue_declare(queue=_QUEUE, durable=True)
-    # bind to both IAM and participation events so one consumer handles all email triggers
+    # bind to iam, participation, org, event, payment, and marketing events
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="participation.#")
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="org.#")
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="event.#")
+    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="payment.#")
+    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="marketing.#")
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 
-    logger.info("Notification consumer started. Bound to %s, participation.#, org.#.", _ROUTING_KEY)
+    logger.info(
+        "Notification consumer started. Bound to %s, participation.#, org.#, payment.#, marketing.#.",
+        _ROUTING_KEY,
+    )
     channel.start_consuming()
