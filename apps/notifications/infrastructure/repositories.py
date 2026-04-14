@@ -63,7 +63,7 @@ class DjangoNotificationRepository(INotificationRepository):
     def mark_all_read(self, user_id: uuid.UUID) -> int:
         """Mark all unread notifications for this user as read. Returns count updated."""
         now = datetime.now(timezone.utc)
-        updated, _ = Notification.objects.filter(user_id=user_id, is_read=False).update(is_read=True, read_at=now)
+        updated = Notification.objects.filter(user_id=user_id, is_read=False).update(is_read=True, read_at=now)
         return updated
 
     def unread_count(self, user_id: uuid.UUID) -> int:
