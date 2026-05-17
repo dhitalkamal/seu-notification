@@ -21,6 +21,11 @@ _QUEUE = "notifications.iam"
 _ROUTING_KEY = "iam.*"
 
 
+def _send(notification: EmailNotification) -> None:
+    """Deliver via SendGrid with Gmail fallback."""
+    SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
+
+
 def _build_email_verification(payload: dict) -> EmailNotification:
     """Build the email verification message from the event payload."""
     otp = payload["otp"]
@@ -57,9 +62,89 @@ def _build_password_reset(payload: dict) -> EmailNotification:
     )
 
 
+def _build_password_changed(payload: dict) -> EmailNotification:
+    """Build the password-changed security alert."""
+    first_name = payload.get("first_name", "there")
+    ip = payload.get("ip_address", "unknown")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p>Your Sansaar password was just changed.</p>"
+        f"<p>IP address: <strong>{ip}</strong></p>"
+        f"<p>If this was you, no action is needed. "
+        f"If you did not change your password, reset it immediately.</p>"
+    )
+    return EmailNotification(
+        to_email=payload["email"],
+        to_name=first_name,
+        subject="Your Sansaar password was changed",
+        html_body=html,
+    )
+
+
+def _build_mfa_enabled(payload: dict) -> EmailNotification:
+    """Build the MFA-enabled security alert."""
+    first_name = payload.get("first_name", "there")
+    ip = payload.get("ip_address", "unknown")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p>Two-factor authentication (MFA) has been enabled on your Sansaar account.</p>"
+        f"<p>IP address: <strong>{ip}</strong></p>"
+        f"<p>If this was not you, secure your account immediately by changing your password.</p>"
+    )
+    return EmailNotification(
+        to_email=payload["email"],
+        to_name=first_name,
+        subject="MFA enabled on your Sansaar account",
+        html_body=html,
+    )
+
+
+def _build_mfa_disabled(payload: dict) -> EmailNotification:
+    """Build the MFA-disabled security alert."""
+    first_name = payload.get("first_name", "there")
+    ip = payload.get("ip_address", "unknown")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p><strong>Warning:</strong> Two-factor authentication (MFA) has been "
+        f"<strong>disabled</strong> on your Sansaar account.</p>"
+        f"<p>IP address: <strong>{ip}</strong></p>"
+        f"<p>If this was not you, re-enable MFA and change your password immediately.</p>"
+    )
+    return EmailNotification(
+        to_email=payload["email"],
+        to_name=first_name,
+        subject="MFA disabled on your Sansaar account",
+        html_body=html,
+    )
+
+
+def _build_account_locked(payload: dict) -> EmailNotification:
+    """Build the account-locked security alert."""
+    first_name = payload.get("first_name", "there")
+    ip = payload.get("ip_address", "unknown")
+    locked_until = payload.get("locked_until", "shortly")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p>Your Sansaar account has been temporarily locked due to multiple failed login attempts.</p>"
+        f"<p>IP address: <strong>{ip}</strong></p>"
+        f"<p>The account will unlock at <strong>{locked_until}</strong>.</p>"
+        f"<p>If this was not you, reset your password immediately after the lockout expires.</p>"
+    )
+    return EmailNotification(
+        to_email=payload["email"],
+        to_name=first_name,
+        subject="Your Sansaar account has been temporarily locked",
+        html_body=html,
+    )
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
+    "iam.password_changed": _build_password_changed,
+    "iam.mfa_enabled": _build_mfa_enabled,
+    "iam.mfa_disabled": _build_mfa_disabled,
+    "iam.account_locked": _build_account_locked,
 }
 
 
@@ -80,7 +165,7 @@ def _handle_message(
             return
 
         notification = builder(payload)
-        SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
+        _send(notification)
         channel.basic_ack(delivery_tag=method.delivery_tag)
         logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
     except Exception:
