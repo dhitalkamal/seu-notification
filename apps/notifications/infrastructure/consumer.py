@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 import pika
 from django.conf import settings
@@ -11,6 +12,7 @@ from django.conf import settings
 from apps.notifications.application.use_cases.send_email import SendEmailUseCase
 from apps.notifications.domain.entities import EmailNotification
 from apps.notifications.infrastructure.senders.gmail_sender import GmailEmailSender
+from apps.notifications.infrastructure.senders.mailhog_sender import MailHogEmailSender
 from apps.notifications.infrastructure.senders.sendgrid_sender import SendGridEmailSender
 
 logger = logging.getLogger(__name__)
@@ -20,10 +22,16 @@ _EXCHANGE_TYPE = "topic"
 _QUEUE = "notifications.iam"
 _ROUTING_KEY = "iam.*"
 
+# Explicit opt-in for local mail capture — set USE_MAILHOG=true in env to use MailHog.
+_USE_MAILHOG = os.getenv("USE_MAILHOG", "false").strip().lower() == "true"
+
 
 def _send(notification: EmailNotification) -> None:
-    """Deliver via SendGrid with Gmail fallback."""
-    SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
+    """Route to MailHog when USE_MAILHOG=true, otherwise SendGrid with Gmail fallback."""
+    if _USE_MAILHOG:
+        MailHogEmailSender().send(notification)
+    else:
+        SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
 
 
 def _build_email_verification(payload: dict) -> EmailNotification:
