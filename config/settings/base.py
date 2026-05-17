@@ -1,4 +1,5 @@
 """Base Django settings for the notification-service."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -109,6 +110,12 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 RABBITMQ_URL = config("RABBITMQ_URL", default="amqp://guest:guest@localhost:5672/")
+
+SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
+SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL", default="")
+SENDGRID_FROM_NAME = config("SENDGRID_FROM_NAME", default="Sansaar: The Event Universe")
+GMAIL_ADDRESS = config("GMAIL_ADDRESS", default="")
+GMAIL_APP_PASSWORD = config("GMAIL_APP_PASSWORD", default="")
 
 CACHES = {
     "default": {
