@@ -19,6 +19,8 @@ _EXCHANGE = "sansaar"
 _EXCHANGE_TYPE = "topic"
 _QUEUE = "notifications.iam"
 _ROUTING_KEY = "iam.*"
+_API_QUEUE = "notifications.api"
+_API_ROUTING_KEY = "notification.api"
 
 
 def _build_email_verification(payload: dict) -> EmailNotification:
@@ -57,9 +59,20 @@ def _build_password_reset(payload: dict) -> EmailNotification:
     )
 
 
+def _build_api_notification(payload: dict) -> EmailNotification:
+    """Build an email from a generic API-triggered notification payload."""
+    return EmailNotification(
+        to_email=payload.get("to_email", ""),
+        to_name=payload.get("to_name", ""),
+        subject=payload.get("subject", "Notification"),
+        html_body=payload.get("html_body", ""),
+    )
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
+    "notification.api": _build_api_notification,
 }
 
 
@@ -81,8 +94,22 @@ def _handle_message(
 
         notification = builder(payload)
         SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
+
+        if event_name == "notification.api" and payload.get("notification_id"):
+            import uuid as _uuid
+
+            from apps.notifications.infrastructure.repositories import DjangoNotificationRepository
+
+            DjangoNotificationRepository().update_status(
+                _uuid.UUID(payload["notification_id"]), "delivered"
+            )
+
         channel.basic_ack(delivery_tag=method.delivery_tag)
-        logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
+        logger.info(
+            "Email sent for event %s to %s.",
+            event_name,
+            payload.get("to_email", payload.get("email")),
+        )
     except Exception:
         logger.error("Failed to process message for event %s.", method.routing_key, exc_info=True)
         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
@@ -95,10 +122,20 @@ def start_consuming() -> None:
     channel = connection.channel()
 
     channel.exchange_declare(exchange=_EXCHANGE, exchange_type=_EXCHANGE_TYPE, durable=True)
+
     channel.queue_declare(queue=_QUEUE, durable=True)
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
+
+    channel.queue_declare(queue=_API_QUEUE, durable=True)
+    channel.queue_bind(queue=_API_QUEUE, exchange=_EXCHANGE, routing_key=_API_ROUTING_KEY)
+
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
+    channel.basic_consume(queue=_API_QUEUE, on_message_callback=_handle_message)
 
-    logger.info("Notification consumer started. Waiting for messages on %s.", _QUEUE)
+    logger.info(
+        "Notification consumer started. Waiting for messages on %s and %s.",
+        _QUEUE,
+        _API_QUEUE,
+    )
     channel.start_consuming()
