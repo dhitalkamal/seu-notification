@@ -14,6 +14,7 @@ dependencies = [
     "redis",
     "pika",
     "drf-spectacular",
+    "sendgrid",
 ]
 
 [dependency-groups]
