@@ -1,4 +1,4 @@
-"""RabbitMQ consumer for incoming notification events."""
+"""RabbitMQ consumer for incoming IAM notification events."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import json
 import logging
 
 import pika
-import pika.exceptions
 from django.conf import settings
 
 from apps.notifications.application.use_cases.send_email import SendEmailUseCase
@@ -18,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 _EXCHANGE = "sansaar"
 _EXCHANGE_TYPE = "topic"
-_QUEUE = "notifications.email_verification"
-_ROUTING_KEY = "iam.email_verification_requested"
+_QUEUE = "notifications.iam"
+_ROUTING_KEY = "iam.*"
 
 
-def _build_otp_email(payload: dict) -> EmailNotification:
-    """Build the verification email from a raw event payload dict."""
+def _build_email_verification(payload: dict) -> EmailNotification:
+    """Build the email verification message from the event payload."""
     otp = payload["otp"]
     first_name = payload.get("first_name", "there")
     html = (
@@ -40,19 +39,52 @@ def _build_otp_email(payload: dict) -> EmailNotification:
     )
 
 
+def _build_password_reset(payload: dict) -> EmailNotification:
+    """Build the password reset message from the event payload."""
+    otp = payload["otp"]
+    first_name = payload.get("first_name", "there")
+    html = (
+        f"<p>Hi {first_name},</p>"
+        f"<p>Use the code below to reset your Sansaar password. It expires in 10 minutes.</p>"
+        f"<h2 style='letter-spacing:4px;font-family:monospace'>{otp}</h2>"
+        f"<p>If you did not request a password reset, you can ignore this email.</p>"
+    )
+    return EmailNotification(
+        to_email=payload["email"],
+        to_name=first_name,
+        subject="Reset your Sansaar password",
+        html_body=html,
+    )
+
+
+_HANDLERS = {
+    "iam.email_verification_requested": _build_email_verification,
+    "iam.password_reset_requested": _build_password_reset,
+}
+
+
 def _handle_message(
-    channel: pika.channel.Channel, method: pika.spec.Basic.Deliver, _props: object, body: bytes
+    channel: pika.channel.Channel,
+    method: pika.spec.Basic.Deliver,
+    _props: object,
+    body: bytes,
 ) -> None:
-    """Process a single message from the queue."""
+    """Route and process a single message from the queue."""
     try:
         payload = json.loads(body)
-        notification = _build_otp_email(payload)
-        use_case = SendEmailUseCase(SendGridEmailSender(), GmailEmailSender())
-        use_case.execute(notification)
+        event_name = method.routing_key
+        builder = _HANDLERS.get(event_name)
+        if builder is None:
+            logger.warning("No handler for event %s, skipping.", event_name)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            return
+
+        notification = builder(payload)
+        SendEmailUseCase(SendGridEmailSender(), GmailEmailSender()).execute(notification)
         channel.basic_ack(delivery_tag=method.delivery_tag)
-        logger.info("Verification email sent to %s.", payload.get("email"))
+        logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
     except Exception:
-        logger.error("Failed to process notification message.", exc_info=True)
+        logger.error("Failed to process message for event %s.", method.routing_key, exc_info=True)
         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
