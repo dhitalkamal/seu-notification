@@ -146,6 +146,58 @@ def _build_account_locked(payload: dict) -> EmailNotification:
     )
 
 
+def _build_registration_confirmed(payload: dict) -> EmailNotification | None:
+    """Build the registration confirmation email. Returns None when email is absent."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info(
+            "participation.registration.created missing email — skipping email send. "
+            "user_id=%s",
+            payload.get("user_id"),
+        )
+        return None
+    code = payload.get("registration_code", "")
+    name = payload.get("first_name", "there")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>You're registered! Here is your entry code:</p>"
+        f"<h2 style='letter-spacing:4px;font-family:monospace;font-size:28px'>{code}</h2>"
+        f"<p>Show this code (or its QR) at the entrance.</p>"
+        f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email, to_name=name,
+        subject="You're registered! Your entry code inside",
+        html_body=html,
+    )
+
+
+def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
+    """Build the waitlist promotion email. Returns None when email is absent."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info(
+            "participation.waitlist.promoted missing email — skipping email send. "
+            "user_id=%s",
+            payload.get("user_id"),
+        )
+        return None
+    code = payload.get("registration_code", "")
+    name = payload.get("first_name", "there")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Good news — a spot opened up and you've been moved off the waitlist!</p>"
+        f"<p>Your registration code:</p>"
+        f"<h2 style='letter-spacing:4px;font-family:monospace;font-size:28px'>{code}</h2>"
+        f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email, to_name=name,
+        subject="Great news — you're off the waitlist!",
+        html_body=html,
+    )
+
+
 _HANDLERS = {
     "iam.email_verification_requested": _build_email_verification,
     "iam.password_reset_requested": _build_password_reset,
@@ -153,6 +205,8 @@ _HANDLERS = {
     "iam.mfa_enabled": _build_mfa_enabled,
     "iam.mfa_disabled": _build_mfa_disabled,
     "iam.account_locked": _build_account_locked,
+    "participation.registration.created": _build_registration_confirmed,
+    "participation.waitlist.promoted": _build_waitlist_promoted,
 }
 
 
@@ -173,9 +227,12 @@ def _handle_message(
             return
 
         notification = builder(payload)
-        _send(notification)
+        if notification is not None:
+            _send(notification)
+            logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
+        else:
+            logger.debug("Builder returned None for event %s — acking without send.", event_name)
         channel.basic_ack(delivery_tag=method.delivery_tag)
-        logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
     except Exception:
         logger.error("Failed to process message for event %s.", method.routing_key, exc_info=True)
         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
@@ -189,9 +246,13 @@ def start_consuming() -> None:
 
     channel.exchange_declare(exchange=_EXCHANGE, exchange_type=_EXCHANGE_TYPE, durable=True)
     channel.queue_declare(queue=_QUEUE, durable=True)
+    # bind to both IAM and participation events so one consumer handles all email triggers
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
+    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="participation.#")
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 
-    logger.info("Notification consumer started. Waiting for messages on %s.", _QUEUE)
+    logger.info(
+        "Notification consumer started. Bound to %s and participation.#.", _ROUTING_KEY
+    )
     channel.start_consuming()
