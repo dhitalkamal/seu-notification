@@ -2,9 +2,60 @@
 
 from __future__ import annotations
 
-from apps.notifications.domain.entities import EmailNotification
-from apps.notifications.domain.exceptions import EmailDeliveryError
-from apps.notifications.domain.repositories import IEmailSender
+import uuid
+from datetime import datetime, timezone
+
+from apps.notifications.domain.entities import (
+    DeviceTokenEntity,
+    EmailNotification,
+    NotificationEntity,
+    NotificationPreferenceEntity,
+)
+from apps.notifications.domain.exceptions import EmailDeliveryError, NotificationNotFoundError
+from apps.notifications.domain.repositories import (
+    IDeviceTokenRepository,
+    IEmailSender,
+    INotificationPreferenceRepository,
+    INotificationRepository,
+)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def make_notification(**kwargs: object) -> NotificationEntity:
+    """Build a NotificationEntity with sensible defaults."""
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "notification_type": "general",
+        "channel": "in_app",
+        "title": "Test Notification",
+        "message": "This is a test.",
+        "status": "delivered",
+        "is_read": False,
+        "created_at": _now(),
+        "read_at": None,
+        "data": {},
+    }
+    defaults.update(kwargs)
+    return NotificationEntity(**defaults)  # type: ignore[arg-type]
+
+
+def make_preference(**kwargs: object) -> NotificationPreferenceEntity:
+    """Build a NotificationPreferenceEntity with sensible defaults."""
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "notification_type": "general",
+        "email_enabled": True,
+        "push_enabled": True,
+        "sms_enabled": False,
+        "in_app_enabled": True,
+    }
+    defaults.update(kwargs)
+    return NotificationPreferenceEntity(**defaults)  # type: ignore[arg-type]
 
 
 class FakeEmailSender(IEmailSender):
@@ -24,3 +75,86 @@ class AlwaysFailEmailSender(IEmailSender):
     def send(self, notification: EmailNotification) -> None:
         """Raise unconditionally."""
         raise EmailDeliveryError("Simulated send failure.")
+
+
+class FakeNotificationRepository(INotificationRepository):
+    """In-memory notification store."""
+
+    def __init__(self, notifications: list[NotificationEntity] | None = None) -> None:
+        self._store: dict[uuid.UUID, NotificationEntity] = {
+            n.id: n for n in (notifications or [])
+        }
+
+    def create(self, entity: NotificationEntity) -> NotificationEntity:
+        """Persist and return."""
+        self._store[entity.id] = entity
+        return entity
+
+    def get_by_id(self, notification_id: uuid.UUID, user_id: uuid.UUID) -> NotificationEntity:
+        """Return notification or raise NotificationNotFoundError."""
+        entity = self._store.get(notification_id)
+        if entity is None or entity.user_id != user_id:
+            raise NotificationNotFoundError("Notification not found.")
+        return entity
+
+    def list_by_user(self, user_id: uuid.UUID) -> list[NotificationEntity]:
+        """Return all for user."""
+        return [n for n in self._store.values() if n.user_id == user_id]
+
+    def mark_read(self, notification_id: uuid.UUID, user_id: uuid.UUID) -> NotificationEntity:
+        """Set is_read=True."""
+        entity = self.get_by_id(notification_id, user_id)
+        if not entity.is_read:
+            entity.is_read = True
+            entity.read_at = _now()
+            self._store[entity.id] = entity
+        return entity
+
+    def mark_all_read(self, user_id: uuid.UUID) -> int:
+        """Mark all unread for user. Returns count updated."""
+        count = 0
+        for entity in list(self._store.values()):
+            if entity.user_id == user_id and not entity.is_read:
+                entity.is_read = True
+                entity.read_at = _now()
+                self._store[entity.id] = entity
+                count += 1
+        return count
+
+
+class FakeNotificationPreferenceRepository(INotificationPreferenceRepository):
+    """In-memory preference store keyed on (user_id, notification_type)."""
+
+    def __init__(self) -> None:
+        self._store: dict[tuple, NotificationPreferenceEntity] = {}
+
+    def get_or_create(
+        self, user_id: uuid.UUID, notification_type: str
+    ) -> NotificationPreferenceEntity:
+        """Return existing or create default."""
+        key = (user_id, notification_type)
+        if key not in self._store:
+            self._store[key] = NotificationPreferenceEntity(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                notification_type=notification_type,
+            )
+        return self._store[key]
+
+    def upsert(self, entity: NotificationPreferenceEntity) -> NotificationPreferenceEntity:
+        """Insert or update."""
+        key = (entity.user_id, entity.notification_type)
+        self._store[key] = entity
+        return entity
+
+
+class FakeDeviceTokenRepository(IDeviceTokenRepository):
+    """In-memory device token store."""
+
+    def __init__(self) -> None:
+        self._store: dict[str, DeviceTokenEntity] = {}
+
+    def register(self, entity: DeviceTokenEntity) -> DeviceTokenEntity:
+        """Upsert by token value."""
+        self._store[entity.token] = entity
+        return entity
