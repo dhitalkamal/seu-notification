@@ -22,7 +22,7 @@ _EXCHANGE_TYPE = "topic"
 _QUEUE = "notifications.iam"
 _ROUTING_KEY = "iam.*"
 
-# Explicit opt-in for local mail capture — set USE_MAILHOG=true in env to use MailHog.
+# Explicit opt-in for local mail capture - set USE_MAILHOG=true in env to use MailHog.
 _USE_MAILHOG = os.getenv("USE_MAILHOG", "false").strip().lower() == "true"
 
 
@@ -133,10 +133,12 @@ def _build_account_locked(payload: dict) -> EmailNotification:
     locked_until = payload.get("locked_until", "shortly")
     html = (
         f"<p>Hi {first_name},</p>"
-        f"<p>Your Sansaar account has been temporarily locked due to multiple failed login attempts.</p>"
+        "<p>Your Sansaar account has been temporarily locked "
+        "due to multiple failed login attempts.</p>"
         f"<p>IP address: <strong>{ip}</strong></p>"
         f"<p>The account will unlock at <strong>{locked_until}</strong>.</p>"
-        f"<p>If this was not you, reset your password immediately after the lockout expires.</p>"
+        "<p>If this was not you, reset your password immediately "
+        "after the lockout expires.</p>"
     )
     return EmailNotification(
         to_email=payload["email"],
@@ -151,7 +153,7 @@ def _build_registration_confirmed(payload: dict) -> EmailNotification | None:
     email = payload.get("email", "")
     if not email:
         logger.info(
-            "participation.registration.created missing email — skipping email send. "
+            "participation.registration.created missing email - skipping email send. "
             "user_id=%s",
             payload.get("user_id"),
         )
@@ -177,7 +179,7 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
     email = payload.get("email", "")
     if not email:
         logger.info(
-            "participation.waitlist.promoted missing email — skipping email send. "
+            "participation.waitlist.promoted missing email - skipping email send. "
             "user_id=%s",
             payload.get("user_id"),
         )
@@ -186,14 +188,37 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
     name = payload.get("first_name", "there")
     html = (
         f"<p>Hi {name},</p>"
-        f"<p>Good news — a spot opened up and you've been moved off the waitlist!</p>"
+        f"<p>Good news - a spot opened up and you have been moved off the waitlist!</p>"
         f"<p>Your registration code:</p>"
         f"<h2 style='letter-spacing:4px;font-family:monospace;font-size:28px'>{code}</h2>"
         f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
         to_email=email, to_name=name,
-        subject="Great news — you're off the waitlist!",
+        subject="Great news - you're off the waitlist!",
+        html_body=html,
+    )
+
+
+def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
+    """Build the cancellation confirmation email. Returns None when email absent."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info(
+            "participation.registration.cancelled missing email - skipping. user_id=%s",
+            payload.get("user_id"),
+        )
+        return None
+    code = payload.get("registration_code", "")
+    name = payload.get("first_name", "there")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Your registration ({code}) has been cancelled.</p>"
+        f"<p>If you did not request this, please contact support.</p>"
+    )
+    return EmailNotification(
+        to_email=email, to_name=name,
+        subject="Your registration has been cancelled",
         html_body=html,
     )
 
@@ -206,6 +231,7 @@ _HANDLERS = {
     "iam.mfa_disabled": _build_mfa_disabled,
     "iam.account_locked": _build_account_locked,
     "participation.registration.created": _build_registration_confirmed,
+    "participation.registration.cancelled": _build_registration_cancelled,
     "participation.waitlist.promoted": _build_waitlist_promoted,
 }
 
@@ -231,7 +257,7 @@ def _handle_message(
             _send(notification)
             logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
         else:
-            logger.debug("Builder returned None for event %s — acking without send.", event_name)
+            logger.debug("Builder returned None for event %s - acking without send.", event_name)
         channel.basic_ack(delivery_tag=method.delivery_tag)
     except Exception:
         logger.error("Failed to process message for event %s.", method.routing_key, exc_info=True)
