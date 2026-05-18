@@ -57,3 +57,28 @@ class DeviceTokenEntity:
     platform: str
     is_active: bool
     created_at: datetime
+
+
+@dataclass(slots=True)
+class JourneyStageEntity:
+    """A single timed stage in an event's automated notification journey."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    stage_type: str
+    trigger_at: datetime
+    status: str
+    created_at: datetime
+    fired_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class EventJourneyEntity:
+    """The full automated notification journey for one event."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    event_start: datetime
+    event_end: datetime
+    created_at: datetime
+    stages: list = field(default_factory=list)

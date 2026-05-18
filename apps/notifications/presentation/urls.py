@@ -6,6 +6,7 @@ from django.urls import URLPattern, path
 
 from .views import (
     DeviceTokenView,
+    EventJourneyView,
     HealthCheckView,
     NotificationListCreateView,
     NotificationMarkAllReadView,
@@ -37,5 +38,10 @@ urlpatterns: list[URLPattern] = [
         "preferences/<str:notification_type>/",
         NotificationPreferenceView.as_view(),
         name="notification-preference",
+    ),
+    path(
+        "journeys/events/<uuid:event_id>/",
+        EventJourneyView.as_view(),
+        name="event-journey",
     ),
 ]

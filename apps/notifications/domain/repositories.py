@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from apps.notifications.domain.entities import (
     DeviceTokenEntity,
     EmailNotification,
+    EventJourneyEntity,
+    JourneyStageEntity,
     NotificationEntity,
     NotificationPreferenceEntity,
 )
@@ -64,3 +67,19 @@ class IDeviceTokenRepository(ABC):
 
     @abstractmethod
     def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]: ...
+
+
+class IEventJourneyRepository(ABC):
+    """Persistence contract for event journey and stage records."""
+
+    @abstractmethod
+    def create(self, journey: "EventJourneyEntity") -> "EventJourneyEntity": ...
+
+    @abstractmethod
+    def get_by_event(self, event_id: uuid.UUID) -> "EventJourneyEntity | None": ...
+
+    @abstractmethod
+    def get_due_stages(self, as_of: "datetime") -> list["JourneyStageEntity"]: ...
+
+    @abstractmethod
+    def mark_stage_fired(self, stage_id: uuid.UUID) -> None: ...
