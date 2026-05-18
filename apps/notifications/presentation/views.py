@@ -14,6 +14,9 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
+from apps.notifications.application.use_cases.batch_create_notifications import (
+    BatchCreateNotificationsUseCase,
+)
 from apps.notifications.application.use_cases.create_journey import CreateEventJourneyUseCase
 from apps.notifications.application.use_cases.create_notification import CreateNotificationUseCase
 from apps.notifications.application.use_cases.get_due_stages import GetDueStagesUseCase
@@ -47,6 +50,7 @@ _PREF_REPO = DjangoNotificationPreferenceRepository
 _TOKEN_REPO = DjangoDeviceTokenRepository
 _JOURNEY_REPO = DjangoEventJourneyRepository
 _CREATE_UC = CreateNotificationUseCase
+_BATCH_CREATE_UC = BatchCreateNotificationsUseCase
 _MARK_READ_UC = MarkNotificationReadUseCase
 _MARK_ALL_UC = MarkAllReadUseCase
 _REGISTER_TOKEN_UC = RegisterDeviceTokenUseCase
@@ -414,4 +418,52 @@ class EventJourneyView(APIView):
         return created_response(
             {"event_id": str(journey.event_id), "stage_count": len(journey.stages)},
             request=request,
+        )
+
+
+class BatchNotificationView(APIView):
+    """POST /notifications/batch/ - create the same notification for many users."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Batch create notifications",
+        description=(
+            "Send the same notification to up to 1,000 users in a single request. "
+            "Users who disabled the given channel are silently skipped."
+        ),
+        responses={
+            201: OpenApiResponse(description="Notifications created."),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Create one notification per user_id in the batch (capped at 1,000)."""
+        from rest_framework import serializers as drf_serializers
+
+        class BatchSerializer(drf_serializers.Serializer):
+            user_ids = drf_serializers.ListField(
+                child=drf_serializers.UUIDField(), max_length=1000
+            )
+            notification_type = drf_serializers.CharField(max_length=100)
+            channel = drf_serializers.ChoiceField(
+                choices=["in_app", "email", "push", "sms"]
+            )
+            title = drf_serializers.CharField(max_length=255)
+            message = drf_serializers.CharField(max_length=2000)
+            data = drf_serializers.DictField(required=False, default=dict)
+
+        ser = BatchSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        notifications = _BATCH_CREATE_UC(_NOTIF_REPO(), _PREF_REPO()).execute(
+            user_ids=d["user_ids"],
+            notification_type=d["notification_type"],
+            channel=d["channel"],
+            title=d["title"],
+            message=d["message"],
+            data=d.get("data"),
+        )
+        return created_response(
+            {"created": len(notifications)}, request=request
         )

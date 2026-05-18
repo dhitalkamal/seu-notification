@@ -126,12 +126,24 @@ class FakeNotificationRepository(INotificationRepository):
         """Return count of unread notifications for user."""
         return sum(1 for n in self._store.values() if n.user_id == user_id and not n.is_read)
 
+    def batch_create(
+        self, entities: list[NotificationEntity]
+    ) -> list[NotificationEntity]:
+        """Persist all entities and return them."""
+        for entity in entities:
+            self._store[entity.id] = entity
+        return entities
+
 
 class FakeNotificationPreferenceRepository(INotificationPreferenceRepository):
     """In-memory preference store keyed on (user_id, notification_type)."""
 
-    def __init__(self) -> None:
-        self._store: dict[tuple, NotificationPreferenceEntity] = {}
+    def __init__(
+        self, preferences: list[NotificationPreferenceEntity] | None = None
+    ) -> None:
+        self._store: dict[tuple, NotificationPreferenceEntity] = {
+            (p.user_id, p.notification_type): p for p in (preferences or [])
+        }
 
     def get_or_create(
         self, user_id: uuid.UUID, notification_type: str

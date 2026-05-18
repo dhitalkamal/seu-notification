@@ -75,6 +75,14 @@ class DjangoNotificationRepository(INotificationRepository):
         """Return the number of unread notifications for this user."""
         return Notification.objects.filter(user_id=user_id, is_read=False).count()
 
+    def batch_create(
+        self, entities: list[NotificationEntity]
+    ) -> list[NotificationEntity]:
+        """Bulk-insert notifications using bulk_create for efficiency."""
+        objs = [Notification.from_entity(e) for e in entities]
+        Notification.objects.bulk_create(objs)
+        return entities
+
 
 class DjangoNotificationPreferenceRepository(INotificationPreferenceRepository):
     """Persists NotificationPreference entities using the Django ORM."""

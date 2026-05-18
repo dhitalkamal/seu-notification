@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.urls import URLPattern, path
 
 from .views import (
+    BatchNotificationView,
     DeviceTokenView,
     EventJourneyView,
     HealthCheckView,
@@ -18,6 +19,11 @@ from .views import (
 urlpatterns: list[URLPattern] = [
     path("health/", HealthCheckView.as_view(), name="health"),
     path("notifications/", NotificationListCreateView.as_view(), name="notification-list-create"),
+    path(
+        "notifications/batch/",
+        BatchNotificationView.as_view(),
+        name="notification-batch-create",
+    ),
     path(
         "notifications/unread-count/",
         NotificationUnreadCountView.as_view(),
