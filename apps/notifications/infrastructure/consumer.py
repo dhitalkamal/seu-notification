@@ -1,16 +1,19 @@
-"""RabbitMQ consumer for incoming IAM notification events."""
+"""RabbitMQ consumer for incoming IAM and participation notification events."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+import uuid
 
 import pika
 from django.conf import settings
 
 from apps.notifications.application.use_cases.send_email import SendEmailUseCase
 from apps.notifications.domain.entities import EmailNotification
+from apps.notifications.infrastructure.repositories import DjangoDeviceTokenRepository
+from apps.notifications.infrastructure.senders.fcm_sender import send_push_multicast
 from apps.notifications.infrastructure.senders.gmail_sender import GmailEmailSender
 from apps.notifications.infrastructure.senders.mailhog_sender import MailHogEmailSender
 from apps.notifications.infrastructure.senders.sendgrid_sender import SendGridEmailSender
@@ -153,8 +156,7 @@ def _build_registration_confirmed(payload: dict) -> EmailNotification | None:
     email = payload.get("email", "")
     if not email:
         logger.info(
-            "participation.registration.created missing email - skipping email send. "
-            "user_id=%s",
+            "participation.registration.created missing email - skipping email send. user_id=%s",
             payload.get("user_id"),
         )
         return None
@@ -168,7 +170,8 @@ def _build_registration_confirmed(payload: dict) -> EmailNotification | None:
         f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
-        to_email=email, to_name=name,
+        to_email=email,
+        to_name=name,
         subject="You're registered! Your entry code inside",
         html_body=html,
     )
@@ -179,8 +182,7 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
     email = payload.get("email", "")
     if not email:
         logger.info(
-            "participation.waitlist.promoted missing email - skipping email send. "
-            "user_id=%s",
+            "participation.waitlist.promoted missing email - skipping email send. user_id=%s",
             payload.get("user_id"),
         )
         return None
@@ -194,7 +196,8 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
         f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
-        to_email=email, to_name=name,
+        to_email=email,
+        to_name=name,
         subject="Great news - you're off the waitlist!",
         html_body=html,
     )
@@ -217,10 +220,43 @@ def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
         f"<p>If you did not request this, please contact support.</p>"
     )
     return EmailNotification(
-        to_email=email, to_name=name,
+        to_email=email,
+        to_name=name,
         subject="Your registration has been cancelled",
         html_body=html,
     )
+
+
+_PUSH_TITLES = {
+    "participation.registration.created": "Registration confirmed!",
+    "participation.waitlist.promoted": "You are off the waitlist!",
+    "participation.registration.cancelled": "Registration cancelled",
+}
+
+_PUSH_BODIES = {
+    "participation.registration.created": "Your entry code is ready. Check My Tickets.",
+    "participation.waitlist.promoted": "A spot opened up. Your entry code is in My Tickets.",
+    "participation.registration.cancelled": "Your registration has been cancelled.",
+}
+
+
+def _send_push_for_participation(event_name: str, payload: dict) -> None:
+    """Send FCM push notifications to all active devices for the user."""
+    user_id_str = payload.get("user_id", "")
+    if not user_id_str:
+        return
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return
+    tokens = [t.token for t in DjangoDeviceTokenRepository().list_by_user(user_id)]
+    if not tokens:
+        return
+    title = _PUSH_TITLES.get(event_name, "Sansaar notification")
+    body = _PUSH_BODIES.get(event_name, "")
+    count = send_push_multicast(tokens=tokens, title=title, body=body)
+    if count:
+        logger.info("FCM push sent to %d device(s) for event %s.", count, event_name)
 
 
 _HANDLERS = {
@@ -258,6 +294,11 @@ def _handle_message(
             logger.info("Email sent for event %s to %s.", event_name, payload.get("email"))
         else:
             logger.debug("Builder returned None for event %s - acking without send.", event_name)
+
+        # fire-and-forget FCM push for participation events
+        if event_name.startswith("participation."):
+            _send_push_for_participation(event_name, payload)
+
         channel.basic_ack(delivery_tag=method.delivery_tag)
     except Exception:
         logger.error("Failed to process message for event %s.", method.routing_key, exc_info=True)
@@ -278,7 +319,5 @@ def start_consuming() -> None:
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 
-    logger.info(
-        "Notification consumer started. Bound to %s and participation.#.", _ROUTING_KEY
-    )
+    logger.info("Notification consumer started. Bound to %s and participation.#.", _ROUTING_KEY)
     channel.start_consuming()

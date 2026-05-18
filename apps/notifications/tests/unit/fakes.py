@@ -70,7 +70,7 @@ class FakeEmailSender(IEmailSender):
 
 
 class AlwaysFailEmailSender(IEmailSender):
-    """Always raises EmailDeliveryError — simulates a completely broken transport."""
+    """Always raises EmailDeliveryError - simulates a completely broken transport."""
 
     def send(self, notification: EmailNotification) -> None:
         """Raise unconditionally."""
@@ -81,9 +81,7 @@ class FakeNotificationRepository(INotificationRepository):
     """In-memory notification store."""
 
     def __init__(self, notifications: list[NotificationEntity] | None = None) -> None:
-        self._store: dict[uuid.UUID, NotificationEntity] = {
-            n.id: n for n in (notifications or [])
-        }
+        self._store: dict[uuid.UUID, NotificationEntity] = {n.id: n for n in (notifications or [])}
 
     def create(self, entity: NotificationEntity) -> NotificationEntity:
         """Persist and return."""
@@ -120,6 +118,10 @@ class FakeNotificationRepository(INotificationRepository):
                 self._store[entity.id] = entity
                 count += 1
         return count
+
+    def unread_count(self, user_id: uuid.UUID) -> int:
+        """Return count of unread notifications for user."""
+        return sum(1 for n in self._store.values() if n.user_id == user_id and not n.is_read)
 
 
 class FakeNotificationPreferenceRepository(INotificationPreferenceRepository):
@@ -158,3 +160,7 @@ class FakeDeviceTokenRepository(IDeviceTokenRepository):
         """Upsert by token value."""
         self._store[entity.token] = entity
         return entity
+
+    def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]:
+        """Return all active tokens for a user."""
+        return [t for t in self._store.values() if t.user_id == user_id and t.is_active]

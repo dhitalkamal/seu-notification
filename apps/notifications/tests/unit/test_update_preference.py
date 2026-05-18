@@ -48,12 +48,20 @@ def test_update_preference_overwrites_existing():
     repo = FakeNotificationPreferenceRepository()
     user_id = uuid.uuid4()
     UpdateNotificationPreferenceUseCase(repo).execute(
-        user_id=user_id, notification_type="general",
-        email_enabled=True, push_enabled=True, sms_enabled=False, in_app_enabled=True,
+        user_id=user_id,
+        notification_type="general",
+        email_enabled=True,
+        push_enabled=True,
+        sms_enabled=False,
+        in_app_enabled=True,
     )
     result = UpdateNotificationPreferenceUseCase(repo).execute(
-        user_id=user_id, notification_type="general",
-        email_enabled=False, push_enabled=False, sms_enabled=False, in_app_enabled=False,
+        user_id=user_id,
+        notification_type="general",
+        email_enabled=False,
+        push_enabled=False,
+        sms_enabled=False,
+        in_app_enabled=False,
     )
     assert result.email_enabled is False
     assert result.push_enabled is False

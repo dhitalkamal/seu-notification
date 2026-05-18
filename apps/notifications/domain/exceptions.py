@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from apps.common.api.exceptions import DomainError
 
 

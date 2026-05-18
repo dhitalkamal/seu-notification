@@ -175,9 +175,7 @@ class NotificationListCreateView(APIView):
         summary="List my notifications",
         description="Returns all notifications for the authenticated user, newest first.",
         responses={
-            200: OpenApiResponse(
-                description="Notifications.", response=_NOTIF_RESP(many=True)
-            ),
+            200: OpenApiResponse(description="Notifications.", response=_NOTIF_RESP(many=True)),
             401: OpenApiResponse(description="Missing or invalid JWT."),
         },
     )
@@ -268,9 +266,7 @@ class DeviceTokenView(APIView):
         summary="Register device token",
         request=DeviceTokenSerializer,
         responses={
-            201: OpenApiResponse(
-                description="Token registered.", response=_TOKEN_RESP
-            ),
+            201: OpenApiResponse(description="Token registered.", response=_TOKEN_RESP),
             401: OpenApiResponse(description="Missing or invalid JWT."),
             422: OpenApiResponse(description="Validation error."),
         },
@@ -288,6 +284,22 @@ class DeviceTokenView(APIView):
         return created_response(_TOKEN_RESP(entity).data, request=request)
 
 
+class NotificationUnreadCountView(APIView):
+    """GET /notifications/unread-count/ - return count of unread notifications."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Get unread notification count",
+        responses={200: OpenApiResponse(description="Unread count.")},
+    )
+    def get(self, request: Request) -> Response:
+        """Return the number of unread notifications for the authenticated user."""
+        count = _NOTIF_REPO().unread_count(uuid.UUID(str(request.user.id)))
+        return success_response({"unread_count": count}, request=request)
+
+
 class NotificationPreferenceView(APIView):
     """Get or update channel preferences for a notification type."""
 
@@ -298,9 +310,7 @@ class NotificationPreferenceView(APIView):
         summary="Update notification preferences",
         request=UpdatePreferenceSerializer,
         responses={
-            200: OpenApiResponse(
-                description="Preferences updated.", response=_PREF_RESP
-            ),
+            200: OpenApiResponse(description="Preferences updated.", response=_PREF_RESP),
             401: OpenApiResponse(description="Missing or invalid JWT."),
             422: OpenApiResponse(description="Validation error."),
         },
