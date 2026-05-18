@@ -8,6 +8,8 @@ from django.db import models
 
 from apps.notifications.domain.entities import (
     DeviceTokenEntity,
+    EventJourneyEntity,
+    JourneyStageEntity,
     NotificationEntity,
     NotificationPreferenceEntity,
 )
@@ -162,4 +164,78 @@ class DeviceToken(models.Model):
             token=entity.token,
             platform=entity.platform,
             is_active=entity.is_active,
+        )
+
+
+class EventJourney(models.Model):
+    """An automated notification journey for a single event."""
+
+    class Meta:
+        db_table = '"notifications"."event_journey"'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(unique=True)
+    event_start = models.DateTimeField()
+    event_end = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def to_entity(self) -> EventJourneyEntity:
+        """Map this ORM row to a pure-Python EventJourneyEntity."""
+        return EventJourneyEntity(
+            id=self.id,
+            event_id=self.event_id,
+            event_start=self.event_start,
+            event_end=self.event_end,
+            created_at=self.created_at,
+            stages=[s.to_entity() for s in self.stages.all()],
+        )
+
+    @classmethod
+    def from_entity(cls, entity: EventJourneyEntity) -> "EventJourney":
+        """Build an unsaved ORM instance from an EventJourneyEntity."""
+        return cls(
+            id=entity.id,
+            event_id=entity.event_id,
+            event_start=entity.event_start,
+            event_end=entity.event_end,
+        )
+
+
+class JourneyStage(models.Model):
+    """A single timed stage within an event journey."""
+
+    class Meta:
+        db_table = '"notifications"."journey_stage"'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    journey = models.ForeignKey(EventJourney, on_delete=models.CASCADE, related_name="stages")
+    event_id = models.UUIDField()
+    stage_type = models.CharField(max_length=50)
+    trigger_at = models.DateTimeField()
+    status = models.CharField(max_length=20, default="pending")
+    fired_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def to_entity(self) -> JourneyStageEntity:
+        """Map this ORM row to a pure-Python JourneyStageEntity."""
+        return JourneyStageEntity(
+            id=self.id,
+            event_id=self.event_id,
+            stage_type=self.stage_type,
+            trigger_at=self.trigger_at,
+            status=self.status,
+            created_at=self.created_at,
+            fired_at=self.fired_at,
+        )
+
+    @classmethod
+    def from_entity(cls, entity: JourneyStageEntity, journey: EventJourney) -> "JourneyStage":
+        """Build an unsaved ORM instance from a JourneyStageEntity."""
+        return cls(
+            id=entity.id,
+            journey=journey,
+            event_id=entity.event_id,
+            stage_type=entity.stage_type,
+            trigger_at=entity.trigger_at,
+            status=entity.status,
         )

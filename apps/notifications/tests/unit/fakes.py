@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from apps.notifications.domain.entities import (
     DeviceTokenEntity,
     EmailNotification,
+    EventJourneyEntity,
+    JourneyStageEntity,
     NotificationEntity,
     NotificationPreferenceEntity,
 )
@@ -15,6 +17,7 @@ from apps.notifications.domain.exceptions import EmailDeliveryError, Notificatio
 from apps.notifications.domain.repositories import (
     IDeviceTokenRepository,
     IEmailSender,
+    IEventJourneyRepository,
     INotificationPreferenceRepository,
     INotificationRepository,
 )
@@ -164,3 +167,32 @@ class FakeDeviceTokenRepository(IDeviceTokenRepository):
     def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]:
         """Return all active tokens for a user."""
         return [t for t in self._store.values() if t.user_id == user_id and t.is_active]
+
+
+class FakeJourneyRepository(IEventJourneyRepository):
+    """In-memory journey and stage store."""
+
+    def __init__(self) -> None:
+        self._journeys: dict[uuid.UUID, EventJourneyEntity] = {}
+        self._stages: dict[uuid.UUID, JourneyStageEntity] = {}
+
+    def create(self, journey: EventJourneyEntity) -> EventJourneyEntity:
+        """Store the journey and all its stages."""
+        self._journeys[journey.event_id] = journey
+        for stage in journey.stages:
+            self._stages[stage.id] = stage
+        return journey
+
+    def get_by_event(self, event_id: uuid.UUID) -> EventJourneyEntity | None:
+        """Return the journey for an event or None."""
+        return self._journeys.get(event_id)
+
+    def get_due_stages(self, as_of: datetime) -> list[JourneyStageEntity]:
+        """Return pending stages whose trigger_at is on or before as_of."""
+        return [s for s in self._stages.values() if s.status == "pending" and s.trigger_at <= as_of]
+
+    def mark_stage_fired(self, stage_id: uuid.UUID) -> None:
+        """Mark a stage as fired."""
+        if stage_id in self._stages:
+            self._stages[stage_id].status = "fired"
+            self._stages[stage_id].fired_at = datetime.now(timezone.utc)

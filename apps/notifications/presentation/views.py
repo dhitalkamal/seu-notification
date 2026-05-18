@@ -14,7 +14,9 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
+from apps.notifications.application.use_cases.create_journey import CreateEventJourneyUseCase
 from apps.notifications.application.use_cases.create_notification import CreateNotificationUseCase
+from apps.notifications.application.use_cases.get_due_stages import GetDueStagesUseCase
 from apps.notifications.application.use_cases.mark_all_read import MarkAllReadUseCase
 from apps.notifications.application.use_cases.mark_notification_read import (
     MarkNotificationReadUseCase,
@@ -27,6 +29,7 @@ from apps.notifications.application.use_cases.update_preference import (
 )
 from apps.notifications.infrastructure.repositories import (
     DjangoDeviceTokenRepository,
+    DjangoEventJourneyRepository,
     DjangoNotificationPreferenceRepository,
     DjangoNotificationRepository,
 )
@@ -42,11 +45,14 @@ from apps.notifications.presentation.serializers import (
 _NOTIF_REPO = DjangoNotificationRepository
 _PREF_REPO = DjangoNotificationPreferenceRepository
 _TOKEN_REPO = DjangoDeviceTokenRepository
+_JOURNEY_REPO = DjangoEventJourneyRepository
 _CREATE_UC = CreateNotificationUseCase
 _MARK_READ_UC = MarkNotificationReadUseCase
 _MARK_ALL_UC = MarkAllReadUseCase
 _REGISTER_TOKEN_UC = RegisterDeviceTokenUseCase
 _UPDATE_PREF_UC = UpdateNotificationPreferenceUseCase
+_CREATE_JOURNEY_UC = CreateEventJourneyUseCase
+_GET_DUE_STAGES_UC = GetDueStagesUseCase
 _NOTIF_RESP = NotificationResponseSerializer
 _PREF_RESP = NotificationPreferenceResponseSerializer
 _TOKEN_RESP = DeviceTokenResponseSerializer
@@ -329,3 +335,83 @@ class NotificationPreferenceView(APIView):
             in_app_enabled=d["in_app_enabled"],
         )
         return success_response(_PREF_RESP(entity).data, request=request)
+
+
+class EventJourneyView(APIView):
+    """GET/POST /journeys/events/{event_id}/ - create or get the journey for an event."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Intelligent Event Journey"],
+        summary="Get event journey",
+        description="Return the current journey and stage statuses for an event.",
+        responses={
+            200: OpenApiResponse(description="Journey returned."),
+            404: OpenApiResponse(description="No journey found for this event."),
+        },
+    )
+    def get(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Return the journey for the given event."""
+        journey = _JOURNEY_REPO().get_by_event(event_id)
+        if journey is None:
+            return error_response(
+                code="ERR_JOURNEY_NOT_FOUND",
+                message="No journey found for this event.",
+                http_status=404,
+                request=request,
+            )
+        stages_data = [
+            {
+                "id": str(s.id),
+                "stage_type": s.stage_type,
+                "trigger_at": s.trigger_at.isoformat(),
+                "status": s.status,
+                "fired_at": s.fired_at.isoformat() if s.fired_at else None,
+            }
+            for s in journey.stages
+        ]
+        return success_response(
+            {
+                "event_id": str(journey.event_id),
+                "event_start": journey.event_start.isoformat(),
+                "event_end": journey.event_end.isoformat(),
+                "stages": stages_data,
+            },
+            request=request,
+        )
+
+    @extend_schema(
+        tags=["Intelligent Event Journey"],
+        summary="Create event journey",
+        description=(
+            "Create an automated notification journey for an event. "
+            "Generates 5 stages: pre-event (1 week, 1 day, 1 hour before start), "
+            "post-event followup (24h after end), and certificate-ready (48h after end)."
+        ),
+        responses={
+            201: OpenApiResponse(description="Journey created."),
+            400: OpenApiResponse(description="Missing or invalid event_start/event_end."),
+        },
+    )
+    def post(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Create a new journey for the event from the provided start and end datetimes."""
+        from rest_framework import serializers as drf_serializers
+
+        class JourneyCreateSerializer(drf_serializers.Serializer):
+            event_start = drf_serializers.DateTimeField()
+            event_end = drf_serializers.DateTimeField()
+
+        ser = JourneyCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        journey = _CREATE_JOURNEY_UC(_JOURNEY_REPO()).execute(
+            event_id=event_id,
+            event_start=d["event_start"],
+            event_end=d["event_end"],
+        )
+        return created_response(
+            {"event_id": str(journey.event_id), "stage_count": len(journey.stages)},
+            request=request,
+        )

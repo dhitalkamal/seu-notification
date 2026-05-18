@@ -7,17 +7,22 @@ from datetime import datetime, timezone
 
 from apps.notifications.domain.entities import (
     DeviceTokenEntity,
+    EventJourneyEntity,
+    JourneyStageEntity,
     NotificationEntity,
     NotificationPreferenceEntity,
 )
 from apps.notifications.domain.exceptions import NotificationNotFoundError
 from apps.notifications.domain.repositories import (
     IDeviceTokenRepository,
+    IEventJourneyRepository,
     INotificationPreferenceRepository,
     INotificationRepository,
 )
 from apps.notifications.infrastructure.models import (
     DeviceToken,
+    EventJourney,
+    JourneyStage,
     Notification,
     NotificationPreference,
 )
@@ -120,3 +125,35 @@ class DjangoDeviceTokenRepository(IDeviceTokenRepository):
     def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]:
         """Return all active device tokens for a user."""
         return [t.to_entity() for t in DeviceToken.objects.filter(user_id=user_id, is_active=True)]
+
+
+class DjangoEventJourneyRepository(IEventJourneyRepository):
+    """Persists EventJourney and JourneyStage entities using the Django ORM."""
+
+    def create(self, journey: EventJourneyEntity) -> EventJourneyEntity:
+        """Persist the journey and all its stages atomically."""
+        obj = EventJourney.from_entity(journey)
+        obj.save()
+        for stage in journey.stages:
+            JourneyStage.from_entity(stage, obj).save()
+        return obj.to_entity()
+
+    def get_by_event(self, event_id: uuid.UUID) -> EventJourneyEntity | None:
+        """Return the journey for an event or None if it does not exist."""
+        try:
+            return EventJourney.objects.get(event_id=event_id).to_entity()
+        except EventJourney.DoesNotExist:
+            return None
+
+    def get_due_stages(self, as_of: datetime) -> list[JourneyStageEntity]:
+        """Return pending stages whose trigger_at is on or before as_of."""
+        return [
+            s.to_entity()
+            for s in JourneyStage.objects.filter(status="pending", trigger_at__lte=as_of)
+        ]
+
+    def mark_stage_fired(self, stage_id: uuid.UUID) -> None:
+        """Set status=fired and record fired_at timestamp."""
+        JourneyStage.objects.filter(id=stage_id).update(
+            status="fired", fired_at=datetime.now(timezone.utc)
+        )
