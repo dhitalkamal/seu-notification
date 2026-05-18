@@ -11,11 +11,17 @@ from .views import (
     NotificationMarkAllReadView,
     NotificationMarkReadView,
     NotificationPreferenceView,
+    NotificationUnreadCountView,
 )
 
 urlpatterns: list[URLPattern] = [
     path("health/", HealthCheckView.as_view(), name="health"),
     path("notifications/", NotificationListCreateView.as_view(), name="notification-list-create"),
+    path(
+        "notifications/unread-count/",
+        NotificationUnreadCountView.as_view(),
+        name="notification-unread-count",
+    ),
     path(
         "notifications/<uuid:notification_id>/read/",
         NotificationMarkReadView.as_view(),

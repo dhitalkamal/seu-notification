@@ -19,9 +19,7 @@ def test_mark_read_sets_is_read_true():
     user_id = uuid.uuid4()
     notif = make_notification(user_id=user_id, is_read=False)
     repo = FakeNotificationRepository([notif])
-    result = MarkNotificationReadUseCase(repo).execute(
-        notification_id=notif.id, user_id=user_id
-    )
+    result = MarkNotificationReadUseCase(repo).execute(notification_id=notif.id, user_id=user_id)
     assert result.is_read is True
     assert result.read_at is not None
 
@@ -31,21 +29,18 @@ def test_mark_read_wrong_user_raises():
     notif = make_notification(is_read=False)
     repo = FakeNotificationRepository([notif])
     with pytest.raises(NotificationNotFoundError):
-        MarkNotificationReadUseCase(repo).execute(
-            notification_id=notif.id, user_id=uuid.uuid4()
-        )
+        MarkNotificationReadUseCase(repo).execute(notification_id=notif.id, user_id=uuid.uuid4())
 
 
 def test_mark_read_already_read_is_noop():
     """Marking an already-read notification is a no-op — read_at is not updated."""
     from datetime import datetime, timezone
+
     original_read_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
     user_id = uuid.uuid4()
     notif = make_notification(user_id=user_id, is_read=True, read_at=original_read_at)
     repo = FakeNotificationRepository([notif])
-    result = MarkNotificationReadUseCase(repo).execute(
-        notification_id=notif.id, user_id=user_id
-    )
+    result = MarkNotificationReadUseCase(repo).execute(notification_id=notif.id, user_id=user_id)
     assert result.read_at == original_read_at
 
 

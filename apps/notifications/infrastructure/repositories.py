@@ -61,10 +61,14 @@ class DjangoNotificationRepository(INotificationRepository):
     def mark_all_read(self, user_id: uuid.UUID) -> int:
         """Mark all unread notifications for this user as read. Returns count updated."""
         now = datetime.now(timezone.utc)
-        updated, _ = Notification.objects.filter(
-            user_id=user_id, is_read=False
-        ).update(is_read=True, read_at=now)
+        updated, _ = Notification.objects.filter(user_id=user_id, is_read=False).update(
+            is_read=True, read_at=now
+        )
         return updated
+
+    def unread_count(self, user_id: uuid.UUID) -> int:
+        """Return the number of unread notifications for this user."""
+        return Notification.objects.filter(user_id=user_id, is_read=False).count()
 
 
 class DjangoNotificationPreferenceRepository(INotificationPreferenceRepository):
@@ -112,3 +116,7 @@ class DjangoDeviceTokenRepository(IDeviceTokenRepository):
             },
         )
         return obj.to_entity()
+
+    def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]:
+        """Return all active device tokens for a user."""
+        return [t.to_entity() for t in DeviceToken.objects.filter(user_id=user_id, is_active=True)]

@@ -40,6 +40,9 @@ class INotificationRepository(ABC):
     @abstractmethod
     def mark_all_read(self, user_id: uuid.UUID) -> int: ...
 
+    @abstractmethod
+    def unread_count(self, user_id: uuid.UUID) -> int: ...
+
 
 class INotificationPreferenceRepository(ABC):
     """Persistence contract for NotificationPreference records."""
@@ -58,3 +61,6 @@ class IDeviceTokenRepository(ABC):
 
     @abstractmethod
     def register(self, entity: DeviceTokenEntity) -> DeviceTokenEntity: ...
+
+    @abstractmethod
+    def list_by_user(self, user_id: uuid.UUID) -> list[DeviceTokenEntity]: ...

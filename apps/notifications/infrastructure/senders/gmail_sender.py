@@ -16,14 +16,14 @@ from apps.notifications.domain.repositories import IEmailSender
 logger = logging.getLogger(__name__)
 
 _SMTP_HOST = "smtp.gmail.com"
-_SMTP_PORT = 465
+_SMTP_PORT = 587
 
 
 class GmailEmailSender(IEmailSender):
-    """Delivers email via Gmail SMTP using an app password."""
+    """Delivers email via Gmail SMTP on port 587 using STARTTLS and an app password."""
 
     def send(self, notification: EmailNotification) -> None:
-        """Open an SSL connection to Gmail and send the message. Raises EmailDeliveryError on failure."""
+        """Open a STARTTLS connection to Gmail and send. Raises EmailDeliveryError on failure."""
         msg = MIMEMultipart("alternative")
         msg["Subject"] = notification.subject
         msg["From"] = f"{settings.SENDGRID_FROM_NAME} <{settings.GMAIL_ADDRESS}>"
@@ -31,7 +31,10 @@ class GmailEmailSender(IEmailSender):
         msg.attach(MIMEText(notification.html_body, "html"))
 
         try:
-            with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
+            with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
                 server.login(settings.GMAIL_ADDRESS, settings.GMAIL_APP_PASSWORD)
                 server.sendmail(settings.GMAIL_ADDRESS, notification.to_email, msg.as_string())
         except Exception as exc:
