@@ -54,9 +54,7 @@ def send_push(*, token: str, title: str, body: str, data: dict | None = None) ->
         return False
 
 
-def send_push_multicast(
-    *, tokens: list[str], title: str, body: str, data: dict | None = None
-) -> int:
+def send_push_multicast(*, tokens: list[str], title: str, body: str, data: dict | None = None) -> int:
     """
     Send a push message to multiple device tokens.
 

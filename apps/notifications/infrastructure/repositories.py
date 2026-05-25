@@ -46,10 +46,7 @@ class DjangoNotificationRepository(INotificationRepository):
 
     def list_by_user(self, user_id: uuid.UUID) -> list[NotificationEntity]:
         """Return all notifications for this user, newest first."""
-        return [
-            obj.to_entity()
-            for obj in Notification.objects.filter(user_id=user_id).order_by("-created_at")
-        ]
+        return [obj.to_entity() for obj in Notification.objects.filter(user_id=user_id).order_by("-created_at")]
 
     def mark_read(self, notification_id: uuid.UUID, user_id: uuid.UUID) -> NotificationEntity:
         """Set is_read=True and read_at=now. No-op if already read."""
@@ -66,18 +63,14 @@ class DjangoNotificationRepository(INotificationRepository):
     def mark_all_read(self, user_id: uuid.UUID) -> int:
         """Mark all unread notifications for this user as read. Returns count updated."""
         now = datetime.now(timezone.utc)
-        updated, _ = Notification.objects.filter(user_id=user_id, is_read=False).update(
-            is_read=True, read_at=now
-        )
+        updated, _ = Notification.objects.filter(user_id=user_id, is_read=False).update(is_read=True, read_at=now)
         return updated
 
     def unread_count(self, user_id: uuid.UUID) -> int:
         """Return the number of unread notifications for this user."""
         return Notification.objects.filter(user_id=user_id, is_read=False).count()
 
-    def batch_create(
-        self, entities: list[NotificationEntity]
-    ) -> list[NotificationEntity]:
+    def batch_create(self, entities: list[NotificationEntity]) -> list[NotificationEntity]:
         """Bulk-insert notifications using bulk_create for efficiency."""
         objs = [Notification.from_entity(e) for e in entities]
         Notification.objects.bulk_create(objs)
@@ -87,9 +80,7 @@ class DjangoNotificationRepository(INotificationRepository):
 class DjangoNotificationPreferenceRepository(INotificationPreferenceRepository):
     """Persists NotificationPreference entities using the Django ORM."""
 
-    def get_or_create(
-        self, user_id: uuid.UUID, notification_type: str
-    ) -> NotificationPreferenceEntity:
+    def get_or_create(self, user_id: uuid.UUID, notification_type: str) -> NotificationPreferenceEntity:
         """Return existing preference or create a default one."""
         obj, _ = NotificationPreference.objects.get_or_create(
             user_id=user_id,
@@ -155,13 +146,8 @@ class DjangoEventJourneyRepository(IEventJourneyRepository):
 
     def get_due_stages(self, as_of: datetime) -> list[JourneyStageEntity]:
         """Return pending stages whose trigger_at is on or before as_of."""
-        return [
-            s.to_entity()
-            for s in JourneyStage.objects.filter(status="pending", trigger_at__lte=as_of)
-        ]
+        return [s.to_entity() for s in JourneyStage.objects.filter(status="pending", trigger_at__lte=as_of)]
 
     def mark_stage_fired(self, stage_id: uuid.UUID) -> None:
         """Set status=fired and record fired_at timestamp."""
-        JourneyStage.objects.filter(id=stage_id).update(
-            status="fired", fired_at=datetime.now(timezone.utc)
-        )
+        JourneyStage.objects.filter(id=stage_id).update(status="fired", fired_at=datetime.now(timezone.utc))

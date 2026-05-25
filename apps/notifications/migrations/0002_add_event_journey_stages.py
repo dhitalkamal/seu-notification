@@ -17,9 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.UUIDField(
-                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
-                    ),
+                    models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
                 ),
                 ("event_id", models.UUIDField(unique=True)),
                 ("event_start", models.DateTimeField()),
@@ -35,9 +33,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.UUIDField(
-                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
-                    ),
+                    models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
                 ),
                 ("event_id", models.UUIDField()),
                 ("stage_type", models.CharField(max_length=50)),

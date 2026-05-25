@@ -26,18 +26,14 @@ class MailHogEmailSender(IEmailSender):
         """Connect to MailHog and hand off the message. Raises EmailDeliveryError on failure."""
         msg = MIMEMultipart("alternative")
         msg["Subject"] = notification.subject
-        msg["From"] = (
-            f"{settings.SENDGRID_FROM_NAME} <{settings.GMAIL_ADDRESS or 'noreply@sansaar.local'}>"
-        )
+        msg["From"] = f"{settings.SENDGRID_FROM_NAME} <{settings.GMAIL_ADDRESS or 'noreply@sansaar.local'}>"
         msg["To"] = notification.to_email
         msg.attach(MIMEText(notification.html_body, "html"))
 
         try:
             with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
                 server.sendmail(msg["From"], notification.to_email, msg.as_string())
-            logger.info(
-                "MailHog: delivered '%s' to %s", notification.subject, notification.to_email
-            )
+            logger.info("MailHog: delivered '%s' to %s", notification.subject, notification.to_email)
         except Exception as exc:
             logger.error("MailHog send failed.", exc_info=True)
             raise EmailDeliveryError("MailHog send failed.") from exc

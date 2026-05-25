@@ -18,9 +18,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.UUIDField(
-                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
-                    ),
+                    models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
                 ),
                 ("user_id", models.UUIDField()),
                 ("token", models.CharField(max_length=512, unique=True)),
@@ -43,9 +41,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.UUIDField(
-                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
-                    ),
+                    models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
                 ),
                 ("user_id", models.UUIDField()),
                 ("notification_type", models.CharField(max_length=50)),
@@ -82,11 +78,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 "db_table": '"notifications"."notification"',
-                "indexes": [
-                    models.Index(
-                        fields=["user_id", "-created_at"], name="notificatio_user_id_366c29_idx"
-                    )
-                ],
+                "indexes": [models.Index(fields=["user_id", "-created_at"], name="notificatio_user_id_366c29_idx")],
             },
         ),
         migrations.CreateModel(
@@ -94,9 +86,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.UUIDField(
-                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
-                    ),
+                    models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
                 ),
                 ("user_id", models.UUIDField()),
                 ("notification_type", models.CharField(max_length=50)),

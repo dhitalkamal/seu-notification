@@ -88,8 +88,7 @@ class HealthCheckView(APIView):
         tags=["Health"],
         summary="Service health check",
         description=(
-            "Checks connectivity to PostgreSQL, Redis, and RabbitMQ. "
-            "Returns 200 when all dependencies are healthy, 503 when any are down."
+            "Checks connectivity to PostgreSQL, Redis, and RabbitMQ. Returns 200 when all dependencies are healthy, 503 when any are down."
         ),
         auth=[],
         responses={
@@ -442,13 +441,9 @@ class BatchNotificationView(APIView):
         from rest_framework import serializers as drf_serializers
 
         class BatchSerializer(drf_serializers.Serializer):
-            user_ids = drf_serializers.ListField(
-                child=drf_serializers.UUIDField(), max_length=1000
-            )
+            user_ids = drf_serializers.ListField(child=drf_serializers.UUIDField(), max_length=1000)
             notification_type = drf_serializers.CharField(max_length=100)
-            channel = drf_serializers.ChoiceField(
-                choices=["in_app", "email", "push", "sms"]
-            )
+            channel = drf_serializers.ChoiceField(choices=["in_app", "email", "push", "sms"])
             title = drf_serializers.CharField(max_length=255)
             message = drf_serializers.CharField(max_length=2000)
             data = drf_serializers.DictField(required=False, default=dict)
@@ -464,6 +459,4 @@ class BatchNotificationView(APIView):
             message=d["message"],
             data=d.get("data"),
         )
-        return created_response(
-            {"created": len(notifications)}, request=request
-        )
+        return created_response({"created": len(notifications)}, request=request)

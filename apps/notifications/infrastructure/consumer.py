@@ -203,6 +203,33 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
     )
 
 
+def _build_waitlist_joined(payload: dict) -> EmailNotification | None:
+    """Build the waitlist confirmation email. Returns None when email is absent."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info(
+            "participation.waitlist.joined missing email - skipping email send. user_id=%s",
+            payload.get("user_id"),
+        )
+        return None
+    position = payload.get("position", "?")
+    name = payload.get("first_name", "there")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>The event is currently full, but you've been added to the waitlist "
+        f"at <strong>position #{position}</strong>.</p>"
+        f"<p>We'll notify you immediately if a spot opens up.</p>"
+        f"<p>You can view your waitlist status at "
+        f"<a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject="You're on the waitlist!",
+        html_body=html,
+    )
+
+
 def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
     """Build the cancellation confirmation email. Returns None when email absent."""
     email = payload.get("email", "")
@@ -215,9 +242,7 @@ def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
     code = payload.get("registration_code", "")
     name = payload.get("first_name", "there")
     html = (
-        f"<p>Hi {name},</p>"
-        f"<p>Your registration ({code}) has been cancelled.</p>"
-        f"<p>If you did not request this, please contact support.</p>"
+        f"<p>Hi {name},</p><p>Your registration ({code}) has been cancelled.</p><p>If you did not request this, please contact support.</p>"
     )
     return EmailNotification(
         to_email=email,
@@ -229,15 +254,73 @@ def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
 
 _PUSH_TITLES = {
     "participation.registration.created": "Registration confirmed!",
+    "participation.waitlist.joined": "You're on the waitlist",
     "participation.waitlist.promoted": "You are off the waitlist!",
     "participation.registration.cancelled": "Registration cancelled",
 }
 
 _PUSH_BODIES = {
     "participation.registration.created": "Your entry code is ready. Check My Tickets.",
+    "participation.waitlist.joined": "We'll notify you when a spot opens up.",
     "participation.waitlist.promoted": "A spot opened up. Your entry code is in My Tickets.",
     "participation.registration.cancelled": "Your registration has been cancelled.",
 }
+
+
+def _build_org_created(payload: dict) -> EmailNotification:
+    """Notify the org creator that their application is under review."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    html = (
+        f"<p>Hi,</p>"
+        f"<p>Your organization <strong>{name}</strong> has been submitted for review.</p>"
+        f"<p>Our team will review your application and documents within 24-48 hours. "
+        f"You will receive an email once the review is complete.</p>"
+        f"<p>Thank you for joining Sansaar!</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization submitted for review - {name}",
+        html_body=html,
+    )
+
+
+def _build_org_approved(payload: dict) -> EmailNotification:
+    """Notify the org that they have been approved."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    html = (
+        f"<p>Great news!</p>"
+        f"<p>Your organization <strong>{name}</strong> has been approved and is now active on Sansaar.</p>"
+        f"<p>You can now create events, manage your team, and start accepting registrations.</p>"
+        f"<p>Get started from your <a href='http://localhost:5173/dashboard'>organization dashboard</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization approved - {name}",
+        html_body=html,
+    )
+
+
+def _build_org_rejected(payload: dict) -> EmailNotification:
+    """Notify the org that their application was rejected."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    html = (
+        f"<p>Hi,</p>"
+        f"<p>Unfortunately, your organization <strong>{name}</strong> was not approved at this time.</p>"
+        f"<p>This may be due to incomplete documentation or information. "
+        f"Please review your submission, update your documents, and resubmit for review.</p>"
+        f"<p>If you have questions, please contact our support team.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization review update - {name}",
+        html_body=html,
+    )
 
 
 def _send_push_for_participation(event_name: str, payload: dict) -> None:
@@ -268,7 +351,11 @@ _HANDLERS = {
     "iam.account_locked": _build_account_locked,
     "participation.registration.created": _build_registration_confirmed,
     "participation.registration.cancelled": _build_registration_cancelled,
+    "participation.waitlist.joined": _build_waitlist_joined,
     "participation.waitlist.promoted": _build_waitlist_promoted,
+    "org.created": _build_org_created,
+    "org.approved": _build_org_approved,
+    "org.rejected": _build_org_rejected,
 }
 
 
@@ -316,8 +403,9 @@ def start_consuming() -> None:
     # bind to both IAM and participation events so one consumer handles all email triggers
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
     channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="participation.#")
+    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key="org.#")
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 
-    logger.info("Notification consumer started. Bound to %s and participation.#.", _ROUTING_KEY)
+    logger.info("Notification consumer started. Bound to %s, participation.#, org.#.", _ROUTING_KEY)
     channel.start_consuming()
