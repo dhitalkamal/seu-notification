@@ -17,7 +17,7 @@ def test_model_meta_db_table():
     """Model uses the notifications schema and correct table name."""
     from apps.notifications.infrastructure.digest_models import AuditDigestSchedule
 
-    assert AuditDigestSchedule._meta.db_table == '"notifications"."audit_digest_schedule"'
+    assert AuditDigestSchedule._meta.db_table == "notifications_audit_digest_schedule"
 
 
 def test_model_default_is_active_true():

@@ -33,7 +33,7 @@ class Migration(migrations.Migration):
                 ("acknowledged_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"notifications"."event_update_acknowledgement"',
+                "db_table": "notifications_event_update_acknowledgement",
             },
         ),
         migrations.AddConstraint(

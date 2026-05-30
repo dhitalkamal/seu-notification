@@ -15,7 +15,7 @@ class EventUpdateAcknowledgement(models.Model):
     """
 
     class Meta:
-        db_table = '"notifications"."event_update_acknowledgement"'
+        db_table = "notifications_event_update_acknowledgement"
         constraints = [
             models.UniqueConstraint(
                 fields=["notification_id", "user_id"],

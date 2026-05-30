@@ -30,7 +30,7 @@ class Notification(models.Model):
         FAILED = "failed", "Failed"
 
     class Meta:
-        db_table = '"notifications"."notification"'
+        db_table = "notifications_notification"
         indexes = [
             models.Index(fields=["user_id", "-created_at"]),
         ]
@@ -84,7 +84,7 @@ class NotificationPreference(models.Model):
     """Per-user per-type channel toggle settings."""
 
     class Meta:
-        db_table = '"notifications"."notification_preference"'
+        db_table = "notifications_notification_preference"
         constraints = [
             models.UniqueConstraint(
                 fields=["user_id", "notification_type"],
@@ -135,7 +135,7 @@ class DeviceToken(models.Model):
         WEB = "web", "Web"
 
     class Meta:
-        db_table = '"notifications"."device_token"'
+        db_table = "notifications_device_token"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.UUIDField()
@@ -171,7 +171,7 @@ class EventJourney(models.Model):
     """An automated notification journey for a single event."""
 
     class Meta:
-        db_table = '"notifications"."event_journey"'
+        db_table = "notifications_event_journey"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event_id = models.UUIDField(unique=True)
@@ -205,7 +205,7 @@ class JourneyStage(models.Model):
     """A single timed stage within an event journey."""
 
     class Meta:
-        db_table = '"notifications"."journey_stage"'
+        db_table = "notifications_journey_stage"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     journey = models.ForeignKey(EventJourney, on_delete=models.CASCADE, related_name="stages")

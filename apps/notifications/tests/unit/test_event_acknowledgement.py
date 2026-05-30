@@ -22,7 +22,7 @@ class TestEventUpdateAcknowledgementModel:
 
     def test_model_meta_table_name(self) -> None:
         """Model must use the notifications schema."""
-        assert EventUpdateAcknowledgement._meta.db_table == '"notifications"."event_update_acknowledgement"'
+        assert EventUpdateAcknowledgement._meta.db_table == "notifications_event_update_acknowledgement"
 
 
 class TestAcknowledgeEndpointLogic:

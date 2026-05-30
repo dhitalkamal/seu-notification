@@ -16,7 +16,7 @@ class AuditDigestSchedule(models.Model):
         MONTHLY = "monthly", "Monthly"
 
     class Meta:
-        db_table = '"notifications"."audit_digest_schedule"'
+        db_table = "notifications_audit_digest_schedule"
         ordering = ["-created_at"]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

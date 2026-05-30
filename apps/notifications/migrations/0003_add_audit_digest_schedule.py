@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                 ("created_by", models.UUIDField()),
             ],
             options={
-                "db_table": '"notifications"."audit_digest_schedule"',
+                "db_table": "notifications_audit_digest_schedule",
                 "ordering": ["-created_at"],
             },
         ),

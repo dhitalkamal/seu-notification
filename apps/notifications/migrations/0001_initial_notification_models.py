@@ -8,9 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
-        ("notifications", "0000_create_notifications_schema"),
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
@@ -33,7 +31,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"notifications"."device_token"',
+                "db_table": "notifications_device_token",
             },
         ),
         migrations.CreateModel(
@@ -77,7 +75,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"notifications"."notification"',
+                "db_table": "notifications_notification",
                 "indexes": [models.Index(fields=["user_id", "-created_at"], name="notificatio_user_id_366c29_idx")],
             },
         ),
@@ -96,7 +94,7 @@ class Migration(migrations.Migration):
                 ("in_app_enabled", models.BooleanField(default=True)),
             ],
             options={
-                "db_table": '"notifications"."notification_preference"',
+                "db_table": "notifications_notification_preference",
                 "constraints": [
                     models.UniqueConstraint(
                         fields=("user_id", "notification_type"),

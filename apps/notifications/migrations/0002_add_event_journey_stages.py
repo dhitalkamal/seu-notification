@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"notifications"."event_journey"',
+                "db_table": "notifications_event_journey",
             },
         ),
         migrations.CreateModel(
@@ -51,7 +51,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "db_table": '"notifications"."journey_stage"',
+                "db_table": "notifications_journey_stage",
             },
         ),
     ]
