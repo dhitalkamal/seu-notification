@@ -252,6 +252,94 @@ def _build_registration_cancelled(payload: dict) -> EmailNotification | None:
     )
 
 
+# in-app notification metadata per event - (notification_type, title_template, message)
+_IN_APP_MAP: dict[str, tuple[str, str, str]] = {
+    "participation.registration.created": (
+        "registration_confirmed",
+        "Registration confirmed",
+        "You are registered! Check My Tickets for your entry code.",
+    ),
+    "participation.registration.cancelled": (
+        "ticket_cancelled",
+        "Registration cancelled",
+        "Your event registration has been cancelled.",
+    ),
+    "participation.waitlist.joined": (
+        "waitlist_joined",
+        "Added to waitlist",
+        "The event is full but you are on the waitlist. We will notify you if a spot opens.",
+    ),
+    "participation.waitlist.promoted": (
+        "waitlist_promoted",
+        "Spot available!",
+        "A spot opened up and you have been registered. Check My Tickets for your entry code.",
+    ),
+    "payment.order.completed": (
+        "payment_received",
+        "Payment successful",
+        "Your payment has been confirmed. Your ticket is ready in My Tickets.",
+    ),
+    "org.created": (
+        "org_submitted",
+        "Organization submitted",
+        "Your organization has been submitted for review. We will notify you once verified.",
+    ),
+    "org.approved": (
+        "org_approved",
+        "Organization approved!",
+        "Your organization is now active. You can create events from your dashboard.",
+    ),
+    "org.rejected": (
+        "org_rejected",
+        "Organization needs changes",
+        "Your organization was not approved. Please edit your details and resubmit.",
+    ),
+}
+
+
+def _write_in_app_notification(event_name: str, payload: dict) -> None:
+    """Write an in-app Notification row if the event has a mapping."""
+    meta = _IN_APP_MAP.get(event_name)
+    if meta is None:
+        return
+
+    # determine which user gets the notification
+    user_id_str = payload.get("user_id") or payload.get("creator_id")
+    if not user_id_str:
+        return
+
+    try:
+        user_id = uuid.UUID(str(user_id_str))
+    except ValueError:
+        return
+
+    notification_type, title, message = meta
+
+    try:
+        from apps.notifications.application.use_cases.create_notification import (
+            CreateNotificationUseCase,
+        )
+        from apps.notifications.infrastructure.repositories import (
+            DjangoNotificationPreferenceRepository,
+            DjangoNotificationRepository,
+        )
+
+        CreateNotificationUseCase(
+            DjangoNotificationRepository(),
+            DjangoNotificationPreferenceRepository(),
+        ).execute(
+            user_id=user_id,
+            notification_type=notification_type,
+            channel="in_app",
+            title=title,
+            message=message,
+            data={k: str(v) for k, v in payload.items() if k not in ("email", "otp", "otp_code")},
+        )
+        logger.info("In-app notification created for %s -> user %s", event_name, user_id)
+    except Exception:
+        logger.exception("Failed to write in-app notification for %s", event_name)
+
+
 _PUSH_TITLES = {
     "participation.registration.created": "Registration confirmed!",
     "participation.waitlist.joined": "You're on the waitlist",
@@ -556,6 +644,9 @@ def _handle_message(
         # fire-and-forget FCM push for participation events
         if event_name.startswith("participation."):
             _send_push_for_participation(event_name, payload)
+
+        # write in-app notification row so the bell badge shows a count
+        _write_in_app_notification(event_name, payload)
 
         channel.basic_ack(delivery_tag=method.delivery_tag)
     except Exception:
