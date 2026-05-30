@@ -294,7 +294,7 @@ def _build_org_approved(payload: dict) -> EmailNotification:
         f"<p>Great news!</p>"
         f"<p>Your organization <strong>{name}</strong> has been approved and is now active on Sansaar.</p>"
         f"<p>You can now create events, manage your team, and start accepting registrations.</p>"
-        f"<p>Get started from your <a href='http://localhost:5173/dashboard'>organization dashboard</a>.</p>"
+        f"<p>Get started from your <a href='http://localhost:5173/org/dashboard'>organization dashboard</a>.</p>"
     )
     return EmailNotification(
         to_email=email,

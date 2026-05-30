@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 "db_table": "notifications_notification",
-                "indexes": [models.Index(fields=["user_id", "-created_at"], name="notificatio_user_id_366c29_idx")],
+                "indexes": [models.Index(fields=["user_id", "-created_at"], name="notificatio_user_id_05b4bc_idx")],
             },
         ),
         migrations.CreateModel(

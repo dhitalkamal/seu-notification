@@ -31,6 +31,7 @@ from apps.notifications.application.use_cases.update_preference import (
     UpdateNotificationPreferenceUseCase,
 )
 from apps.notifications.infrastructure.acknowledgement_models import EventUpdateAcknowledgement
+from apps.notifications.infrastructure.audit_publisher import publish_audit
 from apps.notifications.infrastructure.repositories import (
     DjangoDeviceTokenRepository,
     DjangoEventJourneyRepository,
@@ -291,6 +292,12 @@ class DeviceTokenView(APIView):
             token=d["token"],
             platform=d["platform"],
         )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="notification.digest.created",
+            metadata={"platform": d["platform"]},
+        )
         return created_response(_TOKEN_RESP(entity).data, request=request)
 
 
@@ -337,6 +344,11 @@ class NotificationPreferenceView(APIView):
             push_enabled=d["push_enabled"],
             sms_enabled=d["sms_enabled"],
             in_app_enabled=d["in_app_enabled"],
+        )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="notification.preference.updated",
         )
         return success_response(_PREF_RESP(entity).data, request=request)
 
