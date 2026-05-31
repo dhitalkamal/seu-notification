@@ -72,7 +72,7 @@ class DigestScheduleListCreateView(APIView):
         schedule = AuditDigestSchedule.objects.create(
             email=d["email"],
             frequency=d["frequency"],
-            created_by=d["created_by"],
+            created_by=request.user.id,
         )
         return created_response(_serialize_schedule(schedule), request=request)
 

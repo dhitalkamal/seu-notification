@@ -167,7 +167,7 @@ def _build_registration_confirmed(payload: dict) -> EmailNotification | None:
         f"<p>You're registered! Here is your entry code:</p>"
         f"<h2 style='letter-spacing:4px;font-family:monospace;font-size:28px'>{code}</h2>"
         f"<p>Show this code (or its QR) at the entrance.</p>"
-        f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+        f"<p>See your full ticket at <a href='http://localhost:5173/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
         to_email=email,
@@ -193,7 +193,7 @@ def _build_waitlist_promoted(payload: dict) -> EmailNotification | None:
         f"<p>Good news - a spot opened up and you have been moved off the waitlist!</p>"
         f"<p>Your registration code:</p>"
         f"<h2 style='letter-spacing:4px;font-family:monospace;font-size:28px'>{code}</h2>"
-        f"<p>See your full ticket at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+        f"<p>See your full ticket at <a href='http://localhost:5173/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
         to_email=email,
@@ -220,7 +220,7 @@ def _build_waitlist_joined(payload: dict) -> EmailNotification | None:
         f"at <strong>position #{position}</strong>.</p>"
         f"<p>We'll notify you immediately if a spot opens up.</p>"
         f"<p>You can view your waitlist status at "
-        f"<a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+        f"<a href='http://localhost:5173/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
         to_email=email,
@@ -539,12 +539,90 @@ def _build_payment_receipt(payload: dict) -> EmailNotification | None:
         f"<p>Order: <strong>{order_id}</strong></p>"
         f"<p>Amount: <strong>{amount}</strong></p>"
         f"<p>Gateway: <strong>{gateway}</strong></p>"
-        f"<p>View your tickets at <a href='https://sansaar.app/tickets'>My Tickets</a>.</p>"
+        f"<p>View your tickets at <a href='http://localhost:5173/tickets'>My Tickets</a>.</p>"
     )
     return EmailNotification(
         to_email=email,
         to_name=name,
         subject="Payment confirmed - your tickets are ready",
+        html_body=html,
+    )
+
+
+def _build_org_suspended(payload: dict) -> EmailNotification:
+    """Notify the org that their account has been suspended."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    reason = payload.get("reason", "a policy violation")
+    html = (
+        f"<p>Hi,</p>"
+        f"<p>Your organization <strong>{name}</strong> has been suspended due to: {reason}.</p>"
+        f"<p>While suspended, you cannot create events or accept registrations.</p>"
+        f"<p>If you believe this is an error, please contact our support team.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization suspended - {name}",
+        html_body=html,
+    )
+
+
+def _build_org_reinstated(payload: dict) -> EmailNotification:
+    """Notify the org that their account has been reinstated."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    html = (
+        f"<p>Good news!</p>"
+        f"<p>Your organization <strong>{name}</strong> has been reinstated and is active again.</p>"
+        f"<p>You can resume creating events and managing registrations from your "
+        f"<a href='http://localhost:5173/org/dashboard'>dashboard</a>.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization reinstated - {name}",
+        html_body=html,
+    )
+
+
+def _build_org_deleted(payload: dict) -> EmailNotification:
+    """Notify the org that their account has been permanently deleted."""
+    email = payload.get("contact_email", "")
+    name = payload.get("org_name", "your organization")
+    html = (
+        f"<p>Hi,</p>"
+        f"<p>Your organization <strong>{name}</strong> has been permanently removed from Sansaar.</p>"
+        f"<p>All associated events, registrations, and data have been deleted.</p>"
+        f"<p>If you have questions, please contact our support team.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject=f"Organization removed - {name}",
+        html_body=html,
+    )
+
+
+def _build_payment_failed(payload: dict) -> EmailNotification | None:
+    """Notify user that their payment failed."""
+    email = payload.get("email", "")
+    if not email:
+        logger.info("payment.order.failed missing email - skipping. order_id=%s", payload.get("order_id"))
+        return None
+    name = payload.get("first_name", "there")
+    order_id = payload.get("order_id", "")
+    reason = payload.get("reason", "an unknown error")
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Your payment for order <strong>{order_id}</strong> could not be processed.</p>"
+        f"<p>Reason: {reason}</p>"
+        f"<p>Please try again or use a different payment method.</p>"
+    )
+    return EmailNotification(
+        to_email=email,
+        to_name=name,
+        subject="Payment failed - please try again",
         html_body=html,
     )
 
@@ -571,7 +649,11 @@ _HANDLERS = {
     "org.created": _build_org_created,
     "org.approved": _build_org_approved,
     "org.rejected": _build_org_rejected,
+    "org.suspended": _build_org_suspended,
+    "org.reinstated": _build_org_reinstated,
+    "org.deleted": _build_org_deleted,
     "payment.order.completed": _build_payment_receipt,
+    "payment.order.failed": _build_payment_failed,
 }
 
 

@@ -324,6 +324,22 @@ class NotificationPreferenceView(APIView):
 
     @extend_schema(
         tags=["Preferences"],
+        summary="Get notification preferences",
+        responses={
+            200: OpenApiResponse(description="Current preferences.", response=_PREF_RESP),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request, notification_type: str) -> Response:
+        """Return channel preferences for the given notification_type, creating defaults if needed."""
+        entity = _PREF_REPO().get_or_create(
+            user_id=uuid.UUID(str(request.user.id)),
+            notification_type=notification_type,
+        )
+        return success_response(_PREF_RESP(entity).data, request=request)
+
+    @extend_schema(
+        tags=["Preferences"],
         summary="Update notification preferences",
         request=UpdatePreferenceSerializer,
         responses={
@@ -356,7 +372,11 @@ class NotificationPreferenceView(APIView):
 class EventJourneyView(APIView):
     """GET/POST /journeys/events/{event_id}/ - create or get the journey for an event."""
 
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> list:
+        """POST is internal (no auth needed), GET requires auth."""
+        if self.request.method == "POST":
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     @extend_schema(
         tags=["Intelligent Event Journey"],
