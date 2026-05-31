@@ -10,7 +10,6 @@ class AuditDigestScheduleCreateSerializer(serializers.Serializer):
 
     email = serializers.EmailField()
     frequency = serializers.ChoiceField(choices=["daily", "weekly", "monthly"])
-    created_by = serializers.UUIDField()
 
 
 class AuditDigestSchedulePatchSerializer(serializers.Serializer):
