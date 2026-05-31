@@ -353,13 +353,18 @@ class NotificationPreferenceView(APIView):
         ser = UpdatePreferenceSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+        # fetch current state to fill in fields the client didn't send
+        current = _PREF_REPO().get_or_create(
+            user_id=uuid.UUID(str(request.user.id)),
+            notification_type=notification_type,
+        )
         entity = _UPDATE_PREF_UC(_PREF_REPO()).execute(
             user_id=uuid.UUID(str(request.user.id)),
             notification_type=notification_type,
-            email_enabled=d["email_enabled"],
-            push_enabled=d["push_enabled"],
-            sms_enabled=d["sms_enabled"],
-            in_app_enabled=d["in_app_enabled"],
+            email_enabled=d.get("email_enabled", current.email_enabled),
+            push_enabled=d.get("push_enabled", current.push_enabled),
+            sms_enabled=d.get("sms_enabled", current.sms_enabled),
+            in_app_enabled=d.get("in_app_enabled", current.in_app_enabled),
         )
         publish_audit(
             request=request,
