@@ -53,10 +53,10 @@ class DeviceTokenResponseSerializer(serializers.Serializer):
 class UpdatePreferenceSerializer(serializers.Serializer):
     """Payload for updating channel preferences for a notification type."""
 
-    email_enabled = serializers.BooleanField()
-    push_enabled = serializers.BooleanField()
-    sms_enabled = serializers.BooleanField()
-    in_app_enabled = serializers.BooleanField()
+    email_enabled = serializers.BooleanField(required=False)
+    push_enabled = serializers.BooleanField(required=False)
+    sms_enabled = serializers.BooleanField(required=False)
+    in_app_enabled = serializers.BooleanField(required=False)
 
 
 class NotificationPreferenceResponseSerializer(serializers.Serializer):
